@@ -1,36 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { MockAPI } from '../services/MockApi.js';
 import { AudioEngine } from '../services/AudioEngine.js';
-import { 
-  Ticket, 
-  ChevronDown, 
-  ChevronUp, 
-  Layers, 
-  Clock, 
-  Percent, 
-  Search, 
-  AlertCircle, 
-  Award, 
-  CornerDownRight, 
-  HelpCircle,
-  TrendingUp,
-  Fingerprint,
-  Calendar
-} from 'lucide-react';
+import { Ticket, ChevronDown, ChevronUp, ArrowUpRight, Percent, Fingerprint } from 'lucide-react';
 
 export default function MyTicketsView({ onTabChange }) {
   const [tickets, setTickets] = useState([]);
   const [raffles, setRaffles] = useState([]);
-  const [expandedRow, setExpandedRow] = useState(null);
-  const [ticketSearch, setTicketSearch] = useState('');
-  const [filterType, setFilterType] = useState('all');
-  const [activeFaq, setActiveFaq] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [expandedEpid, setExpandedEpid] = useState(null);
 
   useEffect(() => {
-    async function loadTicketContext() {
+    async function loadTicketsLedger() {
       try {
-        setIsLoading(false);
         const [ticketData, raffleData] = await Promise.all([
           MockAPI.getUserTickets(),
           MockAPI.getRaffles()
@@ -38,283 +18,172 @@ export default function MyTicketsView({ onTabChange }) {
         setTickets(ticketData);
         setRaffles(raffleData);
       } catch (err) {
-        console.error("Failed to compile ticket catalog models: ", err);
+        console.error("Failed to sync structural tickets repository arrays: ", err);
       }
     }
-    loadTicketContext();
+    loadTicketsLedger();
   }, []);
 
-  const toggleAccordionRow = (rowId) => {
+  const toggleCounterBox = (epid) => {
     AudioEngine.playClick();
-    setExpandedRow(expandedRow === rowId ? null : rowId);
+    setExpandedEpid(expandedEpid === epid ? null : epid);
   };
-
-  const filteredTickets = tickets.filter(batch => {
-    const parentPool = raffles.find(r => r.id === batch.raffle_id);
-    const poolTitle = parentPool?.title || 'Unknown Raffle Pool';
-    const matchesSearch = poolTitle.toLowerCase().includes(ticketSearch.toLowerCase()) || 
-                          batch.ticket_numbers.some(n => n.toString().includes(ticketSearch));
-    
-    if (filterType === 'all') return matchesSearch;
-    if (filterType === 'bulk') return matchesSearch && batch.quantity_bought >= 5;
-    if (filterType === 'single') return matchesSearch && batch.quantity_bought < 5;
-    return matchesSearch;
-  });
-
-  if (isLoading) {
-    return (
-      <div className="w-full h-44 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-t-[#9D4EDD] border-[#1A1D20] rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 w-full pb-32">
       
-      {/* 1. SELECTION TOOLBAR CONTROL BOX */}
-      <div className="w-full bg-white border-4 border-[#1A1D20] rounded-3xl p-4 shadow-[4px_4px_0px_#1A1D20] space-y-3">
-        <div className="flex items-center gap-2 border-b-2 border-slate-100 pb-2">
-          <Ticket className="w-4 h-4 text-[#9D4EDD]" strokeWidth={2.5} />
-          <h3 className="text-xs font-black uppercase tracking-wider text-[#1A1D20]">
-            Stakes Inventory Filters
+      {/* HEADER INDEX LEGEND BLOCK */}
+      <div className="flex items-center justify-between px-1 border-b-2 border-black pb-3">
+        <div className="flex items-center gap-2">
+          <Ticket className="w-4 h-4 text-black" strokeWidth={2.5} />
+          <h3 className="text-xs font-black uppercase tracking-widest text-black">
+            Verified Purchase Stakes Ledger
           </h3>
         </div>
-
-        {/* Dynamic Search Parameters Line Input */}
-        <div className="relative flex items-center">
-          <input 
-            type="text" 
-            placeholder="Filter vouchers by pool name or number..."
-            value={ticketSearch}
-            onChange={(e) => setTicketSearch(e.target.value)}
-            className="w-full bg-[#F4F7F5] border-2 border-[#1A1D20] rounded-xl px-3 py-2 text-xs font-bold text-[#1A1D20] focus:outline-none"
-          />
-          <Search className="absolute right-3 w-3.5 h-3.5 text-slate-400" strokeWidth={2.5} />
-        </div>
-
-        {/* Filter Type Segment Control Rails */}
-        <div className="grid grid-cols-3 gap-2 pt-1">
-          {[
-            { id: 'all', label: 'All Stakes' },
-            { id: 'bulk', label: 'Bulk Only (≥5)' },
-            { id: 'single', label: 'Small Slices' }
-          ].map(btn => (
-            <button
-              key={btn.id}
-              onClick={() => { AudioEngine.playClick(); setFilterType(btn.id); }}
-              className={`py-1 rounded-lg text-[10px] font-black uppercase tracking-wide border-2 transition-all ${
-                filterType === btn.id 
-                  ? 'bg-[#FFF275] border-[#1A1D20] text-[#1A1D20] shadow-[2px_2px_0px_#1A1D20]' 
-                  : 'bg-white border-slate-200 text-slate-400'
-              }`}
-            >
-              {btn.label}
-            </button>
-          ))}
-        </div>
+        <span className="text-[10px] font-mono font-black text-white bg-black px-2 py-0.5 uppercase tracking-wider">
+          Total Batches: {tickets.length}
+        </span>
       </div>
 
-      {/* 2. INVENTORY FLOW LISTING LAYOUT SHELLS */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-1.5">
-            <TrendingUp className="w-3.5 h-3.5 text-[#38B000]" strokeWidth={2.5} />
-            <span className="text-[10px] uppercase tracking-widest font-black text-slate-400">
-              Verified Ownership Stakes Ledger
-            </span>
-          </div>
-          <span className="text-[10px] font-mono font-black text-slate-500 bg-white border-2 border-[#1A1D20] px-2 py-0.5 rounded-md shadow-[2px_2px_0px_#1A1D20]">
-            Total Entries: {filteredTickets.length}
-          </span>
+      {/* HORIZONTAL VOUCHER STACKS LOOP CHASSIS */}
+      {tickets.length === 0 ? (
+        <div className="border-2 border-black border-dashed p-8 text-center text-xs font-bold text-slate-400">
+          No active ticket stakes allocated within this account workspace.
         </div>
+      ) : (
+        <div className="space-y-4">
+          {tickets.map((batch) => {
+            const pairedPool = raffles.find((r) => r.id === batch.raffle_id);
+            
+            // Unique Event Participation ID (EPID) generation string matrix match rule
+            const generatedEPID = `EPID-2026-${batch.id.slice(0, 4).toUpperCase()}-${batch.raffle_id.slice(-4).toUpperCase()}`;
+            
+            // Calculate real-time winning probability weights
+            const winProbability = pairedPool
+              ? ((batch.quantity_bought / pairedPool.tickets_sold) * 100).toFixed(2)
+              : '0.00';
 
-        {filteredTickets.length === 0 ? (
-          /* Empty Inventory Feedback Widget Frame Structure Override */
-          <div className="w-full bg-white border-4 border-[#1A1D20] rounded-3xl p-8 text-center border-dashed space-y-4 shadow-[4px_4px_0px_#1A1D20]">
-            <div className="w-12 h-12 rounded-full bg-[#FFF275] border-2 border-[#1A1D20] flex items-center justify-center mx-auto shadow-[2px_2px_0px_#1A1D20]">
-              <AlertCircle className="w-6 h-6 text-[#1A1D20]" strokeWidth={2.5} />
-            </div>
-            <div className="space-y-1">
-              <h4 className="text-sm font-black text-[#1A1D20] uppercase">No Ticket Records Matches</h4>
-              <p className="text-[11px] font-bold text-slate-400 max-w-[220px] mx-auto leading-normal">
-                No verified cryptographic token configurations align with your current search query parameters.
-              </p>
-            </div>
-            <button
-              onClick={() => onTabChange('raffle')}
-              className="btn-cartoon-purple py-2 px-5 text-xs font-black"
-            >
-              Explore Active Pools
-            </button>
-          </div>
-        ) : (
-          /* Inventory Items Array Module Map */
-          <div className="space-y-4">
-            {filteredTickets.map((batch) => {
-              const linkedPool = raffles.find(r => r.id === batch.raffle_id);
-              const isCurrentExpanded = expandedRow === batch.id;
-              
-              // Calculate exact live winning probability weights
-              const calculatedProbability = linkedPool 
-                ? ((batch.quantity_bought / linkedPool.tickets_sold) * 100).toFixed(2)
-                : '0.00';
+            const isBoxExpanded = expandedEpid === generatedEPID;
 
-              return (
-                <div
-                  key={batch.id}
-                  className="w-full bg-transparent transition-all"
-                >
-                  {/* 🎟️ DYNAMIC SHY RATTLESNAKE MASK OVERHAUL CONTAINER */}
-                  <div
-                    onClick={() => toggleAccordionRow(batch.id)}
-                    className="cartoon-ticket rounded-2xl p-4 flex items-center justify-between cursor-pointer group border-4 relative"
-                  >
-                    {/* Retro Drawing Ticket Side Punch Holes Cutouts */}
-                    <div className="absolute top-1/2 left-[-10px] -translate-y-1/2 w-5 h-5 rounded-full bg-[#F4F7F5] border-4 border-[#1A1D20]" />
-                    <div className="absolute top-1/2 right-[-10px] -translate-y-1/2 w-5 h-5 rounded-full bg-[#F4F7F5] border-4 border-[#1A1D20]" />
-
-                    <div className="pl-3 space-y-1.5 min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[8px] font-black bg-white border border-black px-1 rounded uppercase tracking-wider text-slate-500">
-                          {linkedPool?.category || 'General'}
-                        </span>
-                        <h4 className="text-xs font-black text-[#1A1D20] tracking-wide truncate max-w-[160px]">
-                          {linkedPool?.title || 'System Allocation Pool'}
-                        </h4>
-                      </div>
-                      
-                      {/* Horizontal Codes Row Ribbon */}
-                      <div className="w-full flex gap-1.5 overflow-x-auto custom-scrollbar pointer-events-none pb-0.5">
-                        {batch.ticket_numbers.map((num, idx) => (
-                          <span
-                            key={idx}
-                            className="px-1.5 py-0.5 rounded bg-[#1A1D20] text-[9px] font-mono font-black tracking-tight text-[#00F5D4] shrink-0"
-                          >
-                            #{num}
-                          </span>
-                        ))}
-                      </div>
+            return (
+              <div key={batch.id} className="w-full flex flex-col">
+                
+                {/* 🎟️ HORIZONTAL SLICE TICKET: WITH SOLID COLORED END SQUARE & JAGS MASK */}
+                <div className="pro-ticket-shape h-24 flex overflow-hidden shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] bg-white relative">
+                  
+                  {/* Left Descriptive Core Information Segment Block */}
+                  <div className="w-[68%] p-3 flex flex-col justify-between min-w-0 pr-4">
+                    <div className="space-y-1 min-w-0">
+                      <span className="text-[9px] font-black font-mono text-[#10B981] bg-[#10B981]/10 px-2 py-0.5 rounded-none tracking-wide uppercase inline-block">
+                        {generatedEPID}
+                      </span>
+                      <h4 className="text-xs font-black text-black uppercase tracking-wide truncate mt-0.5">
+                        {pairedPool?.title || 'System Raffle Campaign Pool'}
+                      </h4>
                     </div>
 
-                    {/* Quantity Value Block Stamp */}
-                    <div className="flex items-center gap-3 shrink-0 pr-2 pl-3 border-l-2 border-dashed border-[#1A1D20]/20">
-                      <div className="text-center min-w-[36px]">
-                        <div className="text-sm font-black text-[#5A189A] leading-none">
-                          {batch.quantity_bought}
-                        </div>
-                        <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                          Tickets
-                        </div>
-                      </div>
-                      <div className="w-7 h-7 bg-white border-2 border-[#1A1D20] rounded-full flex items-center justify-center shadow-[1px_1px_0px_#1A1D20]">
-                        {isCurrentExpanded ? (
-                          <ChevronUp className="w-4 h-4 text-[#1A1D20]" strokeWidth={3} />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 text-[#1A1D20]" strokeWidth={3} />
-                        )}
+                    {/* Meta-metrics alignment layout row */}
+                    <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      <div className="flex items-center gap-1">
+                        <Percent className="w-3 h-3 text-[#10B981]" strokeWidth={2.5} />
+                        <span className="font-mono text-black font-black">{winProbability}% Chance</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* 📂 ACCORDION DISCLOSURE WORKSPACE SPECIFICATIONS BLOCK */}
-                  {isCurrentExpanded && (
-                    <div className="px-5 pb-5 pt-4 bg-white border-x-4 border-b-4 border-[#1A1D20] rounded-b-2xl -mt-2 shadow-[4px_4px_0px_#1A1D20] space-y-4 animate-view-jump position relative z-10">
-                      
-                      {/* Metric Properties Grid Row Cluster */}
-                      <div className="grid grid-cols-2 gap-3">
-                        
-                        {/* Clock Timestamp Detail Item */}
-                        <div className="p-2.5 bg-[#F4F7F5] border-2 border-[#1A1D20] rounded-xl flex items-center gap-2.5 shadow-[2px_2px_0px_#1A1D20]">
-                          <div className="w-7 h-7 rounded-lg bg-white border border-[#1A1D20] flex items-center justify-center shrink-0">
-                            <Clock className="w-4 h-4 text-[#9D4EDD]" strokeWidth={2.5} />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block leading-none">
-                              Sync Stamp
-                            </span>
-                            <span className="text-[10px] font-black text-[#1A1D20] font-mono block mt-1">
-                              {new Date(batch.purchased_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                        </div>
+                  {/* SMALL INTERACTIVE CLICKABLE BOX COUNTER */}
+                  <div 
+                    onClick={() => toggleCounterBox(generatedEPID)}
+                    className="w-[12%] border-l-2 border-dashed border-black bg-slate-50 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-colors"
+                  >
+                    <span className="text-sm font-mono font-black text-black leading-none">
+                      {batch.quantity_bought}
+                    </span>
+                    <span className="text-[7px] font-black uppercase text-slate-400 tracking-widest mt-0.5">
+                      Units
+                    </span>
+                    <div className="mt-1">
+                      {isBoxExpanded ? (
+                        <ChevronUp className="w-3 h-3 text-black" strokeWidth={3} />
+                      ) : (
+                        <ChevronDown className="w-3 h-3 text-black" strokeWidth={3} />
+                      )}
+                    </div>
+                  </div>
 
-                        {/* Weighted Percentage Probability Box Item */}
-                        <div className="p-2.5 bg-[#F4F7F5] border-2 border-[#1A1D20] rounded-xl flex items-center gap-2.5 shadow-[2px_2px_0px_#1A1D20]">
-                          <div className="w-7 h-7 rounded-lg bg-white border border-[#1A1D20] flex items-center justify-center shrink-0">
-                            <Percent className="w-4 h-4 text-[#38B000]" strokeWidth={2.5} />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block leading-none">
-                              Draw Weight
-                            </span>
-                            <span className="text-[10px] font-black text-[#38B000] font-mono block mt-1">
-                              {calculatedProbability}%
-                            </span>
-                          </div>
-                        </div>
+                  {/* RIGHT BLOCK SIDE: SOLID DIFFERENT COLORED END SQUARE WITH PRIZE PHOTO EMBEDDED */}
+                  <div className="w-[20%] bg-black relative border-l-2 border-black flex items-center justify-center overflow-hidden shrink-0">
+                    {/* Multi-triangular cutting jagged sawtooth left edge simulation lines */}
+                    <div className="absolute left-[-4px] top-0 bottom-0 w-[6px] flex flex-col justify-between py-0.5 pointer-events-none z-10">
+                      {[...Array(10)].map((_, idx) => (
+                        <div 
+                          key={idx} 
+                          className="w-1.5 h-1.5 bg-white border-r border-t border-black transform rotate-45 transform-origin-center -ml-0.5" 
+                        />
+                      ))}
+                    </div>
+
+                    {/* Embedded Prize Photo matrix backdrop display */}
+                    {pairedPool?.image ? (
+                      <img 
+                        src={pairedPool.image} 
+                        alt="" 
+                        className="w-full h-full object-cover opacity-80"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-neutral-900" />
+                    )}
+                  </div>
+
+                </div>
+
+                {/* 📂 EXPANDABLE COUNT VALUE SUBFRAME BLOCK INTERFACE DISCLOSURE */}
+                {isBoxExpanded && (
+                  <div className="p-4 bg-slate-50 border-x-2 border-b-2 border-black -mt-0.5 shadow-[2px_2px_0px_rgba(0,0,0,1)] animate-tab-switch text-xs space-y-4">
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-0.5">
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">
+                          Event Registration ID String
+                        </span>
+                        <span className="font-mono font-bold text-black text-[11px] block select-all">
+                          {generatedEPID}
+                        </span>
                       </div>
 
-                      {/* Explicit Sandbox Security Ledger Verification Row */}
-                      <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-start gap-2">
-                        <Fingerprint className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" strokeWidth={2.5} />
-                        <p className="text-[10px] font-bold text-slate-400 leading-normal">
-                          Verification credentials verified on localized storage index pools. Node signature hash sequence is active.
-                        </p>
+                      <div className="space-y-0.5">
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">
+                          Verified Units Stakes Lock
+                        </span>
+                        <span className="font-mono font-bold text-[#10B981] text-[11px] block">
+                          {batch.quantity_bought} Allocations Confirmed
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-black/10 pt-3 flex items-center justify-between">
+                      <div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold">
+                        <Fingerprint className="w-3.5 h-3.5" strokeWidth={2.5} />
+                        <span>Receipt code synced locally inside dashboard variables.</span>
                       </div>
 
-                      {/* View Routing Action CTA Link Trigger */}
+                      {/* Direct redirect link trigger block step to target drawing page */}
                       <button
                         onClick={() => onTabChange('raffle')}
-                        className="w-full btn-cartoon-secondary py-2 text-[10px] font-black flex items-center justify-center gap-1.5"
+                        className="btn-pro-black py-1 px-3 text-[9px] font-black flex items-center gap-1 shrink-0"
                       >
-                        <Layers className="w-3.5 h-3.5" strokeWidth={2.5} /> 
-                        Inspect Running Allocation Parameters
+                        View Active Campaign Pool <ArrowUpRight className="w-3 h-3" strokeWidth={3} />
                       </button>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
-      {/* 3. PLATFORM LITERATURE ACCORDION DOCUMENT SEGMENT FAQ BLOCK */}
-      <div className="cartoon-plate-purple p-5 space-y-3" style={{ boxShadow: '5px 5px 0px #FF9F1C' }}>
-        <div className="flex items-center gap-2 border-b-2 border-[#1A1D20] pb-2">
-          <HelpCircle className="w-4 h-4 text-[#1A1D20]" strokeWidth={2.5} />
-          <h4 className="text-xs font-black uppercase tracking-wider text-[#1A1D20]">
-            Ownership Allocation Handbooks
-          </h4>
-        </div>
-        
-        <div className="space-y-2">
-          {[
-            { q: "Where can I find my full cryptographic ticket hashes?", a: "Each active ticket slice generates a signature linked to your profile model logs. Expand any running row item above to display timestamp properties directly." },
-            { q: "Can ticket stakes be pulled back or recycled?", a: "To ensure full baseline security parameters for all live participants, assets allocated into operational pools are locked inside active schemas until countdown draws complete." }
-          ].map((item, index) => {
-            const isFaqOpen = activeFaq === index;
-            return (
-              <div key={index} className="bg-white border-2 border-[#1A1D20] rounded-xl overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => { AudioEngine.playClick(); setActiveFaq(isFaqOpen ? null : index); }}
-                  className="w-full p-3 flex items-center justify-between text-left text-[11px] font-black text-[#1A1D20] active:bg-slate-50"
-                >
-                  <span>{item.q}</span>
-                  <CornerDownRight className={`w-3.5 h-3.5 text-slate-400 ${isFaqOpen ? 'text-[#9D4EDD]' : ''}`} strokeWidth={2.5} />
-                </button>
-                {isFaqOpen && (
-                  <div className="px-3 pb-3 pt-1 text-[10px] font-bold leading-relaxed text-slate-500 bg-[#F4F7F5]/50 border-t border-slate-100">
-                    {item.a}
                   </div>
                 )}
+
               </div>
             );
           })}
         </div>
-      </div>
+      )}
 
     </div>
   );
