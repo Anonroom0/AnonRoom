@@ -3,150 +3,118 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --app-bg: #f8fafc;
+    --app-text: #0f172a;
+    --primary-blue: #2563eb;
+    --primary-hover: #1d4ed8;
+  }
+
   html, body, #root {
     margin: 0;
     padding: 0;
     width: 100%;
     height: 100%;
-    background-color: #FFFFFF;
-    color: #000000;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--app-bg);
+    color: var(--app-text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
+  }
+
+  /* Smooth selection color */
+  ::selection {
+    background-color: rgba(37, 99, 235, 0.2);
+    color: #1e40af;
   }
 }
 
 @layer components {
-  /* 🔳 Professional Monochrome Interactive CTA Form Button Elements */
-  .btn-pro-black {
-    cursor: pointer;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: #FFFFFF;
-    background-color: #000000;
-    padding: 0.75rem 1.5rem;
-    border: 2px solid #000000;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
+  /* =========================================================
+     STANDARD MODERN APP BUTTONS
+     ========================================================= */
+  .btn-primary {
+    @apply flex items-center justify-center gap-2 px-5 py-3.5 bg-blue-600 text-white text-sm font-semibold rounded-2xl hover:bg-blue-700 active:scale-[0.98] transition-all shadow-sm shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed;
   }
-  .btn-pro-black:hover {
-    background-color: #10B981; /* Emerald Accent Hover Trigger */
-    border-color: #10B981;
-    color: #000000;
-  }
-  .btn-pro-black:active {
-    transform: scale(0.98);
+  
+  .btn-secondary {
+    @apply flex items-center justify-center gap-2 px-5 py-3.5 bg-white text-slate-700 border border-slate-200 text-sm font-semibold rounded-2xl hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
-  .btn-pro-emerald {
-    cursor: pointer;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: #000000;
-    background-color: #10B981;
-    padding: 0.75rem 1.5rem;
-    border: 2px solid #10B981;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-  .btn-pro-emerald:hover {
-    background-color: #000000;
-    border-color: #000000;
-    color: #FFFFFF;
-  }
-  .btn-pro-emerald:active {
-    transform: scale(0.98);
+  .btn-ghost {
+    @apply flex items-center justify-center gap-2 px-4 py-2 bg-transparent text-slate-600 text-sm font-medium rounded-xl hover:bg-slate-100 hover:text-slate-900 active:scale-[0.98] transition-all;
   }
 
-  .btn-pro-outline {
-    cursor: pointer;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #000000;
-    background-color: transparent;
-    padding: 0.6rem 1.2rem;
-    border: 2px solid #000000;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-  .btn-pro-outline:hover {
-    background-color: #000000;
-    color: #FFFFFF;
-  }
-  .btn-pro-outline:active {
-    transform: scale(0.98);
+  /* =========================================================
+     STANDARD APP CONTAINERS & CARDS
+     ========================================================= */
+  .card-standard {
+    @apply bg-white border border-slate-100 rounded-[1.25rem] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] overflow-hidden transition-all;
   }
 
-  /* 🎟️ Horizontal Technical Voucher Shape (Triangular Jagged Edge Cut mask) */
-  .pro-ticket-shape {
-    background-color: #FFFFFF;
-    border: 2px solid #000000;
-    position: relative;
+  .card-hoverable {
+    @apply card-standard hover:shadow-[0_8px_24px_-4px_rgba(0,0,0,0.08)] hover:border-slate-200 cursor-pointer;
   }
 
-  /* Custom functional scroller system bars */
+  .glass-panel {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-sm;
+  }
+
+  /* =========================================================
+     BEAUTIFUL SOFT SCROLLBARS
+     ========================================================= */
   .custom-scrollbar::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+    width: 6px;
+    height: 6px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
+    border-radius: 8px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #000000;
+    background: #cbd5e1;
+    border-radius: 8px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 
-/* 🎬 Smooth structural element frame animations */
-.animate-tab-switch {
-  animation: tabSwitchEffect 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+/* =========================================================
+   FLUID ANIMATIONS & TRANSITIONS
+   ========================================================= */
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-@keyframes tabSwitchEffect {
-  from { opacity: 0; transform: translateY(6px); }
+
+.animate-slide-up {
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pop-in {
+  animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 🔄 System Initialization Loading Animation Dots */
-.dots-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-.dot {
-  height: 12px;
-  width: 12px;
-  border-radius: 0px; /* Square technical layout theme dots */
-  background-color: #000000;
-  animation: proPulse 1.2s infinite ease-in-out;
-}
-.dot:nth-child(1) { animation-delay: -0.3s; }
-.dot:nth-child(2) { animation-delay: -0.15s; }
-.dot:nth-child(3) { animation-delay: 0s; }
-
-@keyframes proPulse {
-  0%, 100% {
-    transform: scale(0.8);
-    opacity: 0.3;
-  }
-  50% {
-    transform: scale(1.2);
-    opacity: 1;
-    background-color: #10B981;
-  }
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }

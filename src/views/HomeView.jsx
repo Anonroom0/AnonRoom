@@ -1,204 +1,440 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Ticket, 
+  Gift, 
+  ChevronRight, 
+  TrendingUp, 
+  Activity, 
+  ArrowRight,
+  Sparkles,
+  Users,
+  Star,
+  Clock,
+  CheckCircle2
+} from 'lucide-react';
 import { MockAPI } from '../services/MockApi.js';
 import { AudioEngine } from '../services/AudioEngine.js';
-import { ShoppingBag, Ticket, Award, ArrowRight, Star, Percent, ShieldCheck } from 'lucide-react';
 
-export default function HomeView({ onTabChange }) {
+export default function HomeView({ onTabChange, onSelectRaffle }) {
+  // ---------------------------------------------------------------------------
+  // STATE MANAGEMENT
+  // ---------------------------------------------------------------------------
   const [ticketCount, setTicketCount] = useState(0);
-  const [activeRaffles, setActiveRaffles] = useState([]);
-  const [touchState, setTouchState] = useState({ startX: 0, currentOffset: 0, isSwiping: false });
-  const [voucherAvailable, setVoucherAvailable] = useState(true);
+  const [raffles, setRaffles] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Carousel & Touch States
+  const [activeBanner, setActiveBanner] = useState(0);
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchOffset, setTouchOffset] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+
+  const carouselRef = useRef(null);
+
+  // ---------------------------------------------------------------------------
+  // RICH MOCK DATA CONTENT
+  // ---------------------------------------------------------------------------
+  
+  // Clean, modern promotional banners
+  const promoBanners = [
+    { 
+      id: 1,
+      tag: "NEW RAFFLE LIVE",
+      title: "Win the new iPhone 15 Pro Max", 
+      subtitle: "Tickets are just 1 AR each. Only 500 tickets total!",
+      actionText: "Join Now",
+      bgGradient: "from-blue-600 to-indigo-700",
+      icon: <Sparkles className="w-12 h-12 text-white/20 absolute -right-2 -bottom-2" />
+    },
+    { 
+      id: 2,
+      tag: "EARN FREE POINTS",
+      title: "Complete Tasks for Free Tickets", 
+      subtitle: "Download our partner apps or invite friends to earn free AR points.",
+      actionText: "Go to Tasks",
+      bgGradient: "from-emerald-500 to-teal-600",
+      icon: <Star className="w-12 h-12 text-white/20 absolute -right-2 -bottom-2" />
+    },
+    { 
+      id: 3,
+      tag: "REWARD CENTER",
+      title: "Claim your 50 USDT Rebate", 
+      subtitle: "Check your rewards center for newly unlocked trading fee coupons.",
+      actionText: "View Rewards",
+      bgGradient: "from-purple-500 to-fuchsia-600",
+      icon: <Gift className="w-12 h-12 text-white/20 absolute -right-2 -bottom-2" />
+    }
+  ];
+
+  // Friendly community activity feed
+  const recentActivity = [
+    { id: 1, user: "Rahul K.", action: "bought 5 tickets", target: "iPhone 15 Pro", time: "Just now", color: "bg-blue-100 text-blue-600" },
+    { id: 2, user: "Priya S.", action: "won the raffle", target: "Amazon Gift Card", time: "5 mins ago", color: "bg-emerald-100 text-emerald-600" },
+    { id: 3, user: "Aman G.", action: "completed a task", target: "+50 Points", time: "12 mins ago", color: "bg-amber-100 text-amber-600" },
+    { id: 4, user: "Vaibhav S.", action: "bought 1 ticket", target: "Iron Man Figure", time: "1 hour ago", color: "bg-blue-100 text-blue-600" },
+    { id: 5, user: "Neha M.", action: "invited a friend", target: "+20 Points", time: "2 hours ago", color: "bg-purple-100 text-purple-600" }
+  ];
+
+  // ---------------------------------------------------------------------------
+  // INITIALIZATION
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    async function loadWorkspaceData() {
+    async function fetchHomeData() {
       try {
-        const [ticketData, raffleData] = await Promise.all([
+        const [purchasedTickets, liveRaffles] = await Promise.all([
           MockAPI.getUserTickets(),
           MockAPI.getRaffles()
         ]);
         
-        // Sum total tickets bought across all verified batch arrays
-        const totalOwned = ticketData.reduce((acc, curr) => acc + curr.quantity_bought, 0);
-        setTicketCount(totalOwned);
-        setActiveRaffles(raffleData.slice(0, 3));
+        // Calculate total tickets owned by user
+        const totalTickets = purchasedTickets.reduce((sum, item) => sum + item.quantity_bought, 0);
+        setTicketCount(totalTickets);
+        setRaffles(liveRaffles);
       } catch (err) {
-        console.error("Home view pipeline aggregation fault: ", err);
+        console.error("Error loading home dashboard:", err);
+      } finally {
+        setIsLoading(false);
       }
     }
-    loadWorkspaceData();
-  }, []);
+    fetchHomeData();
 
-  // Responsive interactive touch-gesture layer for mobile/tablet hero banners
-  const handleTouchStart = (e) => {
-    setTouchState({
-      startX: e.touches[0].clientX,
-      currentOffset: 0,
-      isSwiping: true
-    });
+    // Auto-advance banner every 5 seconds
+    const interval = setInterval(() => {
+      setActiveBanner((current) => (current + 1) % promoBanners.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [promoBanners.length]);
+
+  // ---------------------------------------------------------------------------
+  // TOUCH GESTURE LOGIC FOR CAROUSEL
+  // ---------------------------------------------------------------------------
+  const onTouchStart = (e) => {
+    setTouchStart(e.touches[0].clientX);
+    setTouchOffset(0);
+    setIsSwiping(true);
   };
 
-  const handleTouchMove = (e) => {
-    if (!touchState.isSwiping) return;
-    const diffX = e.touches[0].clientX - touchState.startX;
-    // Cap variance offset thresholds
-    setTouchState(prev => ({ ...prev, currentOffset: Math.min(Math.max(diffX, -120), 120) }));
+  const onTouchMove = (e) => {
+    if (!isSwiping) return;
+    const diff = e.touches[0].clientX - touchStart;
+    setTouchOffset(Math.min(Math.max(diff, -100), 100)); // Cap the drag visual
   };
 
-  const handleTouchEnd = () => {
-    if (touchState.currentOffset < -60) {
+  const onTouchEnd = () => {
+    if (!isSwiping) return;
+    if (touchOffset < -40) {
+      // Swiped Left
       AudioEngine.playClick();
-      onTabChange('raffle');
+      setActiveBanner((prev) => (prev + 1) % promoBanners.length);
+    } else if (touchOffset > 40) {
+      // Swiped Right
+      AudioEngine.playClick();
+      setActiveBanner((prev) => (prev - 1 + promoBanners.length) % promoBanners.length);
     }
-    setTouchState({ startX: 0, currentOffset: 0, isSwiping: false });
+    setTouchStart(0);
+    setTouchOffset(0);
+    setIsSwiping(false);
   };
 
+  const handleBannerClick = (bannerId) => {
+    AudioEngine.playClick();
+    if (bannerId === 1) onTabChange('raffle');
+    if (bannerId === 2) onTabChange('profile'); // Assuming tasks are in profile
+    if (bannerId === 3) onTabChange('profile'); // Assuming rewards are in profile
+  };
+
+  // ---------------------------------------------------------------------------
+  // RENDER: LOADING STATE
+  // ---------------------------------------------------------------------------
+  if (isLoading) {
+    return (
+      <div className="w-full h-full flex flex-col space-y-6 max-w-4xl mx-auto animate-pulse">
+        <div className="w-full h-48 bg-slate-200 rounded-[1.5rem]"></div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="h-28 bg-slate-200 rounded-2xl"></div>
+          <div className="h-28 bg-slate-200 rounded-2xl"></div>
+        </div>
+        <div className="space-y-4">
+          <div className="h-6 w-40 bg-slate-200 rounded-md"></div>
+          <div className="flex gap-4 overflow-hidden">
+            <div className="min-w-[220px] h-48 bg-slate-200 rounded-2xl"></div>
+            <div className="min-w-[220px] h-48 bg-slate-200 rounded-2xl"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // RENDER: MAIN DASHBOARD
+  // ---------------------------------------------------------------------------
   return (
-    <div className="space-y-8 w-full">
+    <div className="w-full max-w-4xl mx-auto space-y-8 pb-8">
       
-      {/* 📱 TOUCH-RESPONSIVE INTERACTIVE HERO BANNER */}
-      <div 
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        className="w-full h-56 bg-black text-white p-6 flex flex-col justify-between border-2 border-black relative overflow-hidden transition-transform duration-150 ease-out"
-        style={{ transform: `translateX(${touchState.currentOffset}px)` }}
-      >
-        <div className="space-y-1.5 max-w-[85%]">
-          <span className="text-[9px] uppercase font-black tracking-[0.2em] bg-[#10B981] text-black px-2 py-0.5 inline-block">
-            Premium Drops
-          </span>
-          <h1 className="text-xl font-black uppercase tracking-wide leading-tight">
-            Exclusive Campaigns Live Now
-          </h1>
-          <p className="text-[11px] font-medium text-slate-400 max-w-sm">
-            Access transparent probability pools with flat 1 AR registration voucher entry limits.
-          </p>
-        </div>
+      {/* 1. INTERACTIVE PROMOTIONAL CAROUSEL */}
+      <div className="relative w-full rounded-[1.5rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.08)]">
+        <div 
+          className="flex transition-transform duration-300 ease-out"
+          style={{ 
+            transform: `translateX(calc(-${activeBanner * 100}% + ${touchOffset}px))`,
+            cursor: isSwiping ? 'grabbing' : 'grab'
+          }}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onMouseDown={(e) => {
+            setTouchStart(e.clientX);
+            setIsSwiping(true);
+          }}
+          onMouseMove={(e) => {
+            if (isSwiping) {
+              const diff = e.clientX - touchStart;
+              setTouchOffset(Math.min(Math.max(diff, -100), 100));
+            }
+          }}
+          onMouseUp={onTouchEnd}
+          onMouseLeave={() => {
+            if (isSwiping) onTouchEnd();
+          }}
+        >
+          {promoBanners.map((banner) => (
+            <div 
+              key={banner.id}
+              className={`w-full shrink-0 h-48 sm:h-56 bg-gradient-to-br ${banner.bgGradient} p-6 sm:p-8 flex flex-col justify-between relative overflow-hidden text-white`}
+            >
+              {/* Decorative Background Elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl transform translate-x-1/2 -translate-y-1/2" />
+              {banner.icon}
 
-        <div className="w-full flex items-center justify-between border-t border-white/10 pt-4">
-          <button 
-            onClick={() => onTabChange('raffle')}
-            className="btn-pro-emerald py-2 text-[10px]"
-          >
-            Buy Tickets
-          </button>
-          
-          <span className="hidden md:inline-block text-[9px] font-bold text-slate-500 uppercase tracking-widest">
-            Swipe left to cycle arena items →
-          </span>
-        </div>
-      </div>
+              <div className="relative z-10 space-y-1.5 max-w-[80%]">
+                <span className="inline-block px-2.5 py-1 bg-white/20 backdrop-blur-md rounded-lg text-[10px] font-bold uppercase tracking-wider mb-1">
+                  {banner.tag}
+                </span>
+                <h2 className="text-xl sm:text-2xl font-black leading-tight drop-shadow-sm">
+                  {banner.title}
+                </h2>
+                <p className="text-sm font-medium text-white/90 drop-shadow-sm">
+                  {banner.subtitle}
+                </p>
+              </div>
 
-      {/* 📊 PLATFORM CONTEXT MATRIX: STAKES COUNT & AVAILABLE COUPONS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        
-        {/* Module Area A: Active Stakes Tracker summary info block */}
-        <div className="border-2 border-black p-5 bg-white flex flex-col justify-between h-32 relative">
-          <div className="flex items-center justify-between w-full">
-            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-              Allocated Stakes Summary
-            </span>
-            <Ticket className="w-4 h-4 text-black" strokeWidth={2.5} />
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-3xl font-black font-mono leading-none">{ticketCount}</span>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-              Active Vouchers
-            </span>
-          </div>
-          <button 
-            onClick={() => onTabChange('tickets')}
-            className="text-[9px] font-black uppercase tracking-wider text-black underline text-left mt-auto hover:text-[#10B981] transition-colors"
-          >
-            Review Entry Codes
-          </button>
-        </div>
-
-        {/* Module Area B: Reward Notification Claims Center Box */}
-        <div className="border-2 border-black p-5 bg-white flex flex-col justify-between h-32 relative">
-          <div className="flex items-center justify-between w-full">
-            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-              Claim Vault Status
-            </span>
-            <Award className="w-4 h-4 text-[#10B981]" strokeWidth={2.5} />
-          </div>
-          {voucherAvailable ? (
-            <div className="space-y-1 mt-2">
-              <h4 className="text-xs font-black uppercase tracking-wide text-black">
-                Trading Fee Vouchers Unlocked
-              </h4>
-              <p className="text-[10px] font-bold text-slate-400">
-                Binance replica coupons ready inside personal vaults.
-              </p>
+              <div className="relative z-10 mt-auto">
+                <button 
+                  onClick={() => handleBannerClick(banner.id)}
+                  className="bg-white text-slate-900 px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors flex items-center gap-2"
+                >
+                  {banner.actionText} <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          ) : (
-            <span className="text-xs font-bold text-slate-400 mt-2">No pending reward items found.</span>
-          )}
-          <button 
-            onClick={() => onTabChange('profile')}
-            className="btn-pro-black py-1 px-3 text-[9px] uppercase tracking-widest font-black ml-auto mt-auto"
-          >
-            View Rewards
-          </button>
+          ))}
+        </div>
+
+        {/* Carousel Pagination Dots */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
+          {promoBanners.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => { AudioEngine.playClick(); setActiveBanner(idx); }}
+              className={`h-1.5 transition-all duration-300 rounded-full ${
+                activeBanner === idx ? 'w-6 bg-white' : 'w-1.5 bg-white/50'
+              }`}
+            />
+          ))}
         </div>
       </div>
 
-      {/* ⚡ DIRECT SELECTION STREAM: PREMIUM CAMPAIGNS TILES PREVIEWS */}
+      {/* 2. QUICK STATS SUMMARY WIDGETS */}
+      <div className="grid grid-cols-2 gap-4">
+        
+        {/* Stat Card 1: My Tickets */}
+        <div 
+          onClick={() => { AudioEngine.playClick(); onTabChange('tickets'); }}
+          className="card-hoverable p-5 flex flex-col justify-between h-[120px] group"
+        >
+          <div className="flex items-start justify-between w-full">
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110">
+              <Ticket className="w-5 h-5" />
+            </div>
+            <span className="text-2xl font-black text-slate-900">{ticketCount}</span>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">My Tickets</h3>
+            <p className="text-xs font-medium text-slate-500 mt-0.5">Active in draws</p>
+          </div>
+        </div>
+
+        {/* Stat Card 2: Reward Points */}
+        <div 
+          onClick={() => { AudioEngine.playClick(); onTabChange('profile'); }} // assuming profile holds rewards/tasks
+          className="card-hoverable p-5 flex flex-col justify-between h-[120px] group"
+        >
+          <div className="flex items-start justify-between w-full">
+            <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110">
+              <Gift className="w-5 h-5" />
+            </div>
+            <span className="text-2xl font-black text-slate-900">120</span>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Reward Points</h3>
+            <p className="text-xs font-medium text-slate-500 mt-0.5">Available to spend</p>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 3. LIVE RAFFLES HORIZONTAL SCROLLER */}
       <div className="space-y-4">
+        {/* Section Header */}
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2">
-            <ShoppingBag className="w-4 h-4 text-black" strokeWidth={2.5} />
-            <h3 className="text-xs font-black uppercase tracking-widest text-black">
-              Featured Drawing Pool Previews
-            </h3>
+            <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-indigo-600" />
+            </div>
+            <h2 className="text-lg font-bold text-slate-900">Live Raffles</h2>
           </div>
           <button 
-            onClick={() => onTabChange('raffle')}
-            className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1 group transition-colors hover:text-black"
+            onClick={() => { AudioEngine.playClick(); onTabChange('raffle'); }}
+            className="text-sm font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors"
           >
-            All Pools <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" strokeWidth={3} />
+            See All <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Dense Professional Grid Layout row block context frames */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {activeRaffles.map((raffle) => {
-            const poolPercentage = Math.round((raffle.tickets_sold / raffle.total_tickets) * 100);
+        {/* Horizontal Scroll Track */}
+        <div className="w-full flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x snap-mandatory">
+          {raffles.map((raffle) => {
+            // Calculate progress for standard UI
+            const percentSold = Math.round((raffle.tickets_sold / raffle.total_tickets) * 100);
+            
             return (
               <div 
                 key={raffle.id}
-                className="border-2 border-black p-4 bg-white space-y-3 flex flex-col justify-between"
+                className="min-w-[240px] w-[240px] bg-white border border-slate-100 rounded-[1.25rem] overflow-hidden shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] snap-start shrink-0 flex flex-col group cursor-pointer transition-all hover:shadow-[0_8px_24px_-4px_rgba(0,0,0,0.08)]"
+                onClick={() => onSelectRaffle(raffle.id)}
               >
-                <div className="w-full h-32 bg-slate-100 border border-slate-200 relative overflow-hidden">
-                  <img src={raffle.image} alt="" className="w-full h-full object-cover" />
-                  <span className="absolute top-2 right-2 text-[8px] font-black bg-black text-white px-1.5 py-0.5 uppercase tracking-wider">
-                    {raffle.category}
-                  </span>
+                {/* Image Header Area */}
+                <div className="w-full h-32 bg-slate-100 relative overflow-hidden">
+                  <img 
+                    src={raffle.image} 
+                    alt={raffle.title} 
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-60" />
+                  <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm text-slate-900 text-[10px] font-bold px-2 py-1 rounded-md shadow-sm">
+                    1 AR / Ticket
+                  </div>
                 </div>
 
-                <div className="space-y-1 flex-1">
-                  <h4 className="text-xs font-black text-black uppercase tracking-wide truncate">
+                {/* Content Area */}
+                <div className="p-4 flex flex-col flex-1">
+                  <h3 className="text-sm font-bold text-slate-900 leading-tight mb-3 line-clamp-2">
                     {raffle.title}
-                  </h4>
-                  <div className="w-full h-1.5 bg-slate-100 border border-black overflow-hidden mt-1.5">
-                    <div className="h-full bg-black" style={{ width: `${poolPercentage}%` }} />
-                  </div>
-                  <div className="flex justify-between items-center text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                    <span>Filled Capacity</span>
-                    <span className="font-mono text-black">{poolPercentage}%</span>
+                  </h3>
+                  
+                  <div className="mt-auto space-y-2.5">
+                    {/* Standard Modern Progress Bar */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        <span>{raffle.tickets_sold} Sold</span>
+                        <span>{raffle.total_tickets} Total</span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-out" 
+                          style={{ width: `${percentSold}%` }} 
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onSelectRaffle(raffle.id); }}
+                      className="w-full btn-secondary py-2 text-xs"
+                    >
+                      Join Raffle
+                    </button>
                   </div>
                 </div>
-
-                <button
-                  onClick={() => onTabChange('raffle')}
-                  className="w-full btn-pro-black py-2 text-[10px]"
-                >
-                  Buy Ticket
-                </button>
               </div>
             );
           })}
         </div>
+      </div>
+
+      {/* 4. "WAYS TO EARN" QUICK LINKS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div 
+          onClick={() => { AudioEngine.playClick(); onTabChange('profile'); }} 
+          className="card-hoverable p-5 flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100/50"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-blue-600">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm">Complete Tasks</h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">Earn points daily</p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-blue-400" />
+        </div>
+
+        <div 
+          onClick={() => { AudioEngine.playClick(); onTabChange('profile'); }}
+          className="card-hoverable p-5 flex items-center justify-between bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-100/50"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-emerald-600">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm">Refer Friends</h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">Get 50 AR per invite</p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-emerald-400" />
+        </div>
+      </div>
+
+      {/* 5. RECENT COMMUNITY ACTIVITY FEED */}
+      <div className="card-standard bg-white">
+        <div className="p-5 border-b border-slate-100 flex items-center gap-3">
+          <Activity className="w-5 h-5 text-slate-400" />
+          <h2 className="text-base font-bold text-slate-900">Recent Activity</h2>
+          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse ml-auto" />
+        </div>
+        
+        <div className="p-2">
+          {recentActivity.map((activity, index) => (
+            <div 
+              key={activity.id}
+              className={`p-3 flex items-center gap-4 hover:bg-slate-50 rounded-xl transition-colors ${
+                index !== recentActivity.length - 1 ? 'border-b border-slate-50/50' : ''
+              }`}
+            >
+              {/* User Avatar */}
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${activity.color}`}>
+                {activity.user.charAt(0)}
+              </div>
+              
+              {/* Activity Text */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-slate-900 font-medium truncate">
+                  <span className="font-bold">{activity.user}</span> {activity.action} <span className="font-bold text-slate-700">{activity.target}</span>
+                </p>
+                <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+                  <Clock className="w-3 h-3" />
+                  <span>{activity.time}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        {/* Footer Link */}
+        <button className="w-full p-3 text-sm font-bold text-blue-600 hover:bg-blue-50 transition-colors border-t border-slate-100">
+          View All Activity
+        </button>
       </div>
 
     </div>

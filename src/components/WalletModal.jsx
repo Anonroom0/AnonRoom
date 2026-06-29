@@ -1,51 +1,92 @@
 import React, { useState, useEffect } from 'react';
 import { AudioEngine } from '../services/AudioEngine.js';
-import { MockAPI } from '../services/MockApi.js';
-import { X, Wallet, ArrowDownRight, ArrowUpRight, Clock, Copy, Check, AlertTriangle, RefreshCw, Fingerprint } from 'lucide-react';
+import { 
+  X, 
+  Wallet, 
+  Copy, 
+  CheckCircle2, 
+  RefreshCw, 
+  AlertCircle, 
+  Clock, 
+  ArrowDownToLine, 
+  ShieldCheck, 
+  Ticket, 
+  Gift, 
+  ChevronDown, 
+  ChevronUp,
+  CreditCard,
+  History,
+  Check,
+  Info
+} from 'lucide-react';
 
 export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpdate }) {
-  const [activeSubTab, setActiveSubTab] = useState('deposit'); // 'deposit' | 'withdraw' | 'history'
+  // ---------------------------------------------------------------------------
+  // STATE MANAGEMENT
+  // ---------------------------------------------------------------------------
+  const [activeTab, setActiveTab] = useState('deposit'); // 'deposit' | 'history'
+  
+  // Deposit States
   const [depositAddress, setDepositAddress] = useState('');
-  const [timeRemaining, setTimeRemaining] = useState(600); 
-  const [isAddressLocked, setIsAddressLocked] = useState(false);
-  const [copiedAddress, setCopiedAddress] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [withdrawAddress, setWithdrawAddress] = useState('');
-  const [withdrawStatus, setWithdrawStatus] = useState(null); // 'processing' | 'success' | 'error'
+  const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutes
+  const [isLocked, setIsLocked] = useState(false);
+  const [copied, setCopied] = useState(false);
+  
+  // History & Filter States
   const [historyLogs, setHistoryLogs] = useState([]);
+  const [historyFilter, setHistoryFilter] = useState('all'); // 'all' | 'deposits' | 'spending'
+  
+  // UI States
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [expandedFaq, setExpandedFaq] = useState(null);
 
-  // 10 Static operational sequential routing paths framework
-  const staticDestinationPaths = [
-    'ROUTE_PATH_INBOUND_STATIC_SERIAL_KEY_01_SECURE_VAULT',
-    'ROUTE_PATH_INBOUND_STATIC_SERIAL_KEY_02_SECURE_VAULT',
-    'ROUTE_PATH_INBOUND_STATIC_SERIAL_KEY_03_SECURE_VAULT',
-    'ROUTE_PATH_INBOUND_STATIC_SERIAL_KEY_04_SECURE_VAULT',
-    'ROUTE_PATH_INBOUND_STATIC_SERIAL_KEY_05_SECURE_VAULT',
-    'ROUTE_PATH_INBOUND_STATIC_SERIAL_KEY_06_SECURE_VAULT',
-    'ROUTE_PATH_INBOUND_STATIC_SERIAL_KEY_07_SECURE_VAULT',
-    'ROUTE_PATH_INBOUND_STATIC_SERIAL_KEY_08_SECURE_VAULT',
-    'ROUTE_PATH_INBOUND_STATIC_SERIAL_KEY_09_SECURE_VAULT',
-    'ROUTE_PATH_INBOUND_STATIC_SERIAL_KEY_10_SECURE_VAULT'
+  // ---------------------------------------------------------------------------
+  // STATIC DATA & MOCKS
+  // ---------------------------------------------------------------------------
+  
+  // 10 Static operational sequential routing paths (Standardized naming)
+  const staticDepositAddresses = [
+    'WALLET_ADDRESS_SLOT_01_SECURE_VAULT',
+    'WALLET_ADDRESS_SLOT_02_SECURE_VAULT',
+    'WALLET_ADDRESS_SLOT_03_SECURE_VAULT',
+    'WALLET_ADDRESS_SLOT_04_SECURE_VAULT',
+    'WALLET_ADDRESS_SLOT_05_SECURE_VAULT',
+    'WALLET_ADDRESS_SLOT_06_SECURE_VAULT',
+    'WALLET_ADDRESS_SLOT_07_SECURE_VAULT',
+    'WALLET_ADDRESS_SLOT_08_SECURE_VAULT',
+    'WALLET_ADDRESS_SLOT_09_SECURE_VAULT',
+    'WALLET_ADDRESS_SLOT_10_SECURE_VAULT'
   ];
 
+  const faqItems = [
+    { id: 1, question: "How long do deposits take?", answer: "Deposits are usually credited to your account within 1-3 minutes after the transaction is confirmed on the network. Please ensure you send the exact supported token." },
+    { id: 2, question: "Why does the address expire?", answer: "For security and privacy reasons, we generate a unique, temporary address for every deposit session. Do not save or reuse expired addresses." },
+    { id: 3, question: "Are there any deposit fees?", answer: "We do not charge any fees for adding funds to your wallet. However, standard network transaction fees from your sending wallet will apply." }
+  ];
+
+  // ---------------------------------------------------------------------------
+  // LIFECYCLE & EFFECTS
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!isOpen) return;
+    
+    // Load rich mock transaction history
+    setHistoryLogs([
+      { id: 'tx-8921', type: 'Deposit', category: 'deposit', amount: 45.00, stamp: 'June 25, 2026 • 10:22 AM', status: 'Completed' },
+      { id: 'tx-8922', type: 'Ticket Purchase', category: 'spending', amount: -5.00, stamp: 'June 26, 2026 • 02:10 PM', status: 'Completed' },
+      { id: 'tx-8923', type: 'Reward Credit', category: 'deposit', amount: 30.00, stamp: 'June 28, 2026 • 07:15 PM', status: 'Completed' },
+      { id: 'tx-8924', type: 'Ticket Purchase', category: 'spending', amount: -2.00, stamp: 'June 28, 2026 • 07:20 PM', status: 'Completed' },
+      { id: 'tx-8925', type: 'Deposit', category: 'deposit', amount: 100.00, stamp: 'June 29, 2026 • 09:00 AM', status: 'Pending' }
+    ]);
 
-    const mockHistories = [
-      { id: 'tx-8801', type: 'Account Deposit', amount: 30.00, status: 'Completed', date: '2026-06-20 11:15' },
-      { id: 'tx-8802', type: 'Ticket Purchase', amount: -5.00, status: 'Settled', date: '2026-06-22 14:45' },
-      { id: 'tx-8803', type: 'Voucher Credit', amount: 20.00, status: 'Completed', date: '2026-06-25 19:02' }
-    ];
-    setHistoryLogs(mockHistories);
-
-    let timerInterval = null;
-    if (isAddressLocked && timeRemaining > 0) {
-      timerInterval = setInterval(() => {
-        setTimeRemaining((prev) => {
+    // Timer Logic for Deposit Address
+    let clockInterval = null;
+    if (isLocked && timeRemaining > 0) {
+      clockInterval = setInterval(() => {
+        setTimeRemaining(prev => {
           if (prev <= 1) {
-            clearInterval(timerInterval);
-            setIsAddressLocked(false);
+            clearInterval(clockInterval);
+            setIsLocked(false);
             setDepositAddress('');
             return 600;
           }
@@ -53,302 +94,366 @@ export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpd
         });
       }, 1000);
     }
+    return () => { if (clockInterval) clearInterval(clockInterval); };
+  }, [isOpen, isLocked, timeRemaining]);
 
-    return () => {
-      if (timerInterval) clearInterval(timerInterval);
-    };
-  }, [isOpen, isAddressLocked, timeRemaining]);
-
+  // ---------------------------------------------------------------------------
+  // INTERACTION HANDLERS
+  // ---------------------------------------------------------------------------
   if (!isOpen) return null;
 
-  const generateLockPath = () => {
+  const handleGenerateAddress = () => {
     AudioEngine.playClick();
-    // Grab a static destination key slot deterministically matching current time clock variables
-    const selectedIndex = new Date().getMinutes() % 10;
-    setDepositAddress(staticDestinationPaths[selectedIndex]);
+    const currentMinuteDigit = new Date().getMinutes() % 10;
+    setDepositAddress(staticDepositAddresses[currentMinuteDigit]);
     setTimeRemaining(600);
-    setIsAddressLocked(true);
+    setIsLocked(true);
   };
 
-  const handleCopyAction = () => {
+  const handleCopyAddress = () => {
     navigator.clipboard.writeText(depositAddress);
     AudioEngine.playClick();
-    setCopiedAddress(true);
-    setTimeout(() => setCopiedAddress(false), 2000);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleWithdrawalSubmission = async (e) => {
-    e.preventDefault();
-    AudioEngine.playClick();
-    
-    const parsedVal = parseFloat(withdrawAmount);
-    if (isNaN(parsedVal) || parsedVal <= 0 || parsedVal > userProfile?.ar_balance) {
-      setWithdrawStatus('error');
-      return;
-    }
-
-    setWithdrawStatus('processing');
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    try {
-      userProfile.ar_balance -= parsedVal;
-      setWithdrawStatus('success');
-      
-      const generatedTxReceipt = {
-        id: `tx-${Math.floor(Math.random() * 8000 + 2000)}`,
-        type: 'Outbound Remit',
-        amount: -parsedVal,
-        status: 'Completed',
-        date: 'Just Now'
-      };
-      setHistoryLogs((prev) => [generatedTxReceipt, ...prev]);
-      onBalanceUpdate();
-    } catch (err) {
-      setWithdrawStatus('error');
-    }
-  };
-
-  const triggerBalanceSyncRefresh = async () => {
+  const handleManualRefresh = async () => {
     AudioEngine.playClick();
     setIsRefreshing(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // Simulate network sync delay
+    await new Promise(resolve => setTimeout(resolve, 1200));
     onBalanceUpdate();
     setIsRefreshing(false);
   };
 
-  const formatClockString = (totalSecs) => {
-    const minutes = Math.floor(totalSecs / 60);
-    const seconds = totalSecs % 60;
+  const toggleFaq = (id) => {
+    AudioEngine.playClick();
+    setExpandedFaq(expandedFaq === id ? null : id);
+  };
+
+  // ---------------------------------------------------------------------------
+  // HELPER FUNCTIONS
+  // ---------------------------------------------------------------------------
+  const formatTime = (totalSeconds) => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  const getFilteredHistory = () => {
+    if (historyFilter === 'all') return historyLogs;
+    return historyLogs.filter(log => log.category === historyFilter);
+  };
+
+  const getTransactionIcon = (type, category) => {
+    if (type === 'Ticket Purchase') return <Ticket className="w-5 h-5 text-rose-500" />;
+    if (type === 'Reward Credit') return <Gift className="w-5 h-5 text-purple-500" />;
+    if (category === 'deposit') return <ArrowDownToLine className="w-5 h-5 text-emerald-500" />;
+    return <History className="w-5 h-5 text-slate-500" />;
+  };
+
+  // Calculate percentage for the progress bar (600 seconds = 100%)
+  const timerPercentage = (timeRemaining / 600) * 100;
+
+  // ---------------------------------------------------------------------------
+  // RENDER MODAL
+  // ---------------------------------------------------------------------------
   return (
-    <div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex flex-col justify-end p-4 animate-tab-switch">
-      <div className="w-full bg-white border-2 border-black rounded-none max-h-[92%] flex flex-col overflow-hidden shadow-[0px_-4px_20px_rgba(0,0,0,0.15)]">
+    <div className="fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4">
+      
+      {/* Backdrop (Click to close) */}
+      <div 
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-fade-in"
+        onClick={() => { AudioEngine.playClick(); onClose(); }}
+      />
+
+      {/* Main Modal Container */}
+      <div className="w-full sm:max-w-md bg-white sm:rounded-[2rem] rounded-t-[2rem] rounded-b-none max-h-[90vh] sm:max-h-[85vh] flex flex-col relative z-10 animate-slide-up shadow-2xl overflow-hidden">
         
-        {/* Terminal Header */}
-        <div className="w-full h-16 border-b-2 border-black px-5 bg-white flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 border-2 border-black bg-black text-white text-[10px] font-black flex items-center justify-center">
-              W
+        {/* --------------------------------------------------------------------
+            HEADER SECTION
+            -------------------------------------------------------------------- */}
+        <div className="flex items-center justify-between p-5 sm:p-6 border-b border-slate-100 bg-white shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+              <Wallet className="w-5 h-5" />
             </div>
-            <span className="text-xs font-black uppercase tracking-wider text-black">
-              Account Fund Management Terminal
-            </span>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 leading-tight">My Wallet</h2>
+              <p className="text-xs font-medium text-slate-500">Manage your AR balance</p>
+            </div>
           </div>
-          <button
+          <button 
             onClick={() => { AudioEngine.playClick(); onClose(); }}
-            className="w-8 h-8 rounded-none border-2 border-black bg-white flex items-center justify-center hover:bg-black hover:text-white transition-colors"
+            className="w-10 h-10 bg-slate-50 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-100 hover:text-slate-900 transition-colors"
           >
-            <X className="w-4 h-4" strokeWidth={3} />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Balance Panel Status Section */}
-        <div className="w-full bg-black text-white px-5 py-4 flex items-center justify-between shrink-0">
-          <div className="space-y-0.5">
-            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">
-              Available Spendable Balance
-            </span>
-            <span className="text-xl font-black font-mono text-[#10B981]">
-              {userProfile?.ar_balance?.toFixed(2)} AR
-            </span>
+        {/* --------------------------------------------------------------------
+            BALANCE DISPLAY SECTION
+            -------------------------------------------------------------------- */}
+        <div className="bg-slate-50 p-6 sm:p-8 flex items-center justify-between shrink-0 border-b border-slate-100 relative overflow-hidden">
+          {/* Decorative background circle */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl transform translate-x-1/2 -translate-y-1/2" />
+          
+          <div className="relative z-10">
+            <p className="text-sm font-bold text-slate-500 mb-1 uppercase tracking-wider flex items-center gap-1.5">
+              Available Balance <Info className="w-3.5 h-3.5" />
+            </p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tighter">
+                {userProfile?.ar_balance?.toFixed(2) || '0.00'}
+              </span>
+              <span className="text-lg font-bold text-blue-600">AR</span>
+            </div>
           </div>
-          <button
-            onClick={triggerBalanceSyncRefresh}
-            disabled={isRefreshing}
-            className={`w-8 h-8 border border-white/20 flex items-center justify-center text-white bg-white/5 transition-all ${
-              isRefreshing ? 'animate-spin border-[#10B981]' : 'hover:bg-white/10'
+          
+          <button 
+            onClick={handleManualRefresh}
+            className={`w-12 h-12 bg-white border border-slate-200 text-slate-600 rounded-2xl flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm relative z-10 ${
+              isRefreshing ? 'animate-spin border-blue-500 text-blue-600' : ''
             }`}
           >
-            <RefreshCw className="w-4 h-4" strokeWidth={2.5} />
+            <RefreshCw className="w-5 h-5" />
           </button>
         </div>
 
-                {/* Tab Selection Row */}
-        <div className="w-full border-b-2 border-black bg-white px-4 py-2 flex gap-3 shrink-0">
-          {[
-            { id: 'deposit', label: 'Receive Route', icon: ArrowDownRight },
-            { id: 'withdraw', label: 'Send Out', icon: ArrowUpRight },
-            { id: 'history', label: 'Ledger Audit', icon: Clock }
-          ].map((tab) => {
-            const TabIcon = tab.icon;
-            const isSelected = activeSubTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => { AudioEngine.playClick(); setActiveSubTab(tab.id); }}
-                className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wide border-2 transition-all flex items-center justify-center gap-1.5 ${
-                  isSelected 
-                    ? 'bg-black border-black text-white' 
-                    : 'bg-transparent border-transparent text-slate-400 hover:text-black'
-                }`}
-              >
-                <TabIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+        {/* --------------------------------------------------------------------
+            TAB NAVIGATION (PILL STYLE)
+            -------------------------------------------------------------------- */}
+        <div className="p-4 sm:px-6 shrink-0 bg-white border-b border-slate-100">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl">
+            <button 
+              onClick={() => { AudioEngine.playClick(); setActiveTab('deposit'); }} 
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                activeTab === 'deposit' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <ArrowDownToLine className="w-4 h-4" /> Add Funds
+            </button>
+            <button 
+              onClick={() => { AudioEngine.playClick(); setActiveTab('history'); }} 
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                activeTab === 'history' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <History className="w-4 h-4" /> Transactions
+            </button>
+          </div>
         </div>
 
-
-        {/* Scrollable Context Box Workspace Area Viewport */}
-        <div className="p-5 flex-1 overflow-y-auto custom-scrollbar space-y-5 bg-[#FFFFFF]">
+        {/* --------------------------------------------------------------------
+            SCROLLABLE CONTENT AREA
+            -------------------------------------------------------------------- */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar bg-white relative">
           
-          {/* TAB OPTION A: ROUTE GENERATOR RECEIVE MECHANIC */}
-          {activeSubTab === 'deposit' && (
-            <div className="space-y-4 animate-tab-switch text-xs text-black">
-              {!isAddressLocked ? (
-                <div className="border-2 border-black p-5 text-center space-y-4 bg-slate-50">
-                  <p className="text-[11px] font-bold text-slate-400 max-w-[240px] mx-auto leading-normal">
-                    Secure operational balances inbound pathways. Lock your unique network pipeline session key index frame for exactly 10 minutes.
-                  </p>
-                  <button
-                    onClick={generateLockPath}
-                    className="w-full btn-pro-black py-2 text-xs font-black"
+          {/* ================================================================
+              TAB: ADD FUNDS (DEPOSIT)
+              ================================================================ */}
+          {activeTab === 'deposit' && (
+            <div className="p-5 sm:p-6 space-y-6 animate-fade-in pb-8">
+              
+              {!isLocked ? (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 sm:p-8 text-center space-y-5">
+                  <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <CreditCard className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Secure Deposit</h3>
+                    <p className="text-sm text-slate-500 font-medium leading-relaxed mt-2 max-w-[280px] mx-auto">
+                      Generate a temporary, secure address to add AR tokens to your balance. The address will be valid for 10 minutes.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={handleGenerateAddress} 
+                    className="w-full btn-primary py-3.5 shadow-blue-600/20"
                   >
-                    Generate Payment Key Route
+                    Generate Deposit Address
                   </button>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {/* Countdown Ribbon */}
-                  <div className="w-full bg-black border-2 border-black p-3 flex items-center justify-between text-white font-black">
-                    <span className="uppercase text-[9px] tracking-wide flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 text-[#10B981] animate-pulse" strokeWidth={3} />
-                      Route expiration clock running:
-                    </span>
-                    <span className="font-mono text-xs tracking-wider bg-white/10 px-2 py-0.5 border border-white/20">
-                      {formatClockString(timeRemaining)}
-                    </span>
-                  </div>
+                <div className="space-y-6 animate-slide-up">
+                  
+                  {/* Address Display Box */}
+                  <div className="bg-white border-2 border-blue-100 rounded-2xl p-5 shadow-[0_4px_20px_rgba(37,99,235,0.05)] relative overflow-hidden">
+                    
+                    {/* Timer Progress Bar Background */}
+                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-100">
+                      <div 
+                        className={`h-full transition-all duration-1000 ease-linear ${
+                          timeRemaining < 60 ? 'bg-red-500' : 'bg-blue-500'
+                        }`}
+                        style={{ width: `${timerPercentage}%` }}
+                      />
+                    </div>
 
-                  {/* Hash Core */}
-                  <div className="border-2 border-black p-4 space-y-2.5 bg-white">
-                    <label className="text-[9px] font-black uppercase text-slate-400 block px-0.5">
-                      Target Destination Inbound Account Route Key Hash:
-                    </label>
-                    <div className="w-full p-2.5 bg-[#F4F7F5] border border-black flex items-center justify-between gap-3 font-mono text-[10px] font-bold text-slate-700 break-all select-all">
-                      <span>{depositAddress}</span>
-                      <button
-                        onClick={handleCopyAction}
-                        className="w-7 h-7 bg-white border border-black flex items-center justify-center shrink-0 shadow-[1px_1px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none"
+                    <div className="flex items-center justify-between mb-4 mt-2">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Deposit Address</span>
+                      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold ${
+                        timeRemaining < 60 ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                      }`}>
+                        <Clock className="w-3.5 h-3.5" />
+                        <span className="font-mono">{formatTime(timeRemaining)}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 p-3 rounded-xl">
+                      <span className="text-sm font-mono font-bold text-slate-900 break-all select-all">
+                        {depositAddress}
+                      </span>
+                      <button 
+                        onClick={handleCopyAddress} 
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                          copied ? 'bg-green-100 text-green-600' : 'bg-white border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 shadow-sm'
+                        }`}
                       >
-                        {copiedAddress ? (
-                          <Check className="w-3.5 h-3.5 text-[#10B981]" strokeWidth={3} />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5 text-slate-400" strokeWidth={2.5} />
-                        )}
+                        {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
                       </button>
                     </div>
-                  </div>
 
-                  <div className="p-3 bg-slate-50 border border-slate-200 flex items-start gap-2 text-slate-400 text-[10px] leading-normal">
-                    <AlertTriangle className="w-4 h-4 text-black shrink-0 mt-0.5" strokeWidth={2.5} />
-                    <p className="font-bold">
-                      Do not transmit tokens past expiration limits. Balance entries write to your internal storage account array variables upon detection.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB OPTION B: DISPATCH BALANCES OUT VIA VALIDATED FIELDS */}
-          {activeSubTab === 'withdraw' && (
-            <div className="animate-tab-switch text-xs text-black">
-              <form onSubmit={handleWithdrawalSubmission} className="space-y-4">
-                <div className="border-2 border-black p-4 space-y-2 bg-white">
-                  <label className="text-[9px] font-black uppercase text-slate-400 block px-0.5">
-                    Allocation Volume Amount (AR):
-                  </label>
-                  <input 
-                    type="number" 
-                    required
-                    step="0.01"
-                    placeholder="0.00"
-                    value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value)}
-                    className="w-full bg-[#F4F7F5] border border-black px-3 py-2 font-mono text-xs font-bold text-black focus:outline-none"
-                  />
-                </div>
-
-                <div className="border-2 border-black p-4 space-y-2 bg-white">
-                  <label className="text-[9px] font-black uppercase text-slate-400 block px-0.5">
-                    Target Remit Destination Account Routing Address:
-                  </label>
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="Enter valid target account unique identification string..."
-                    value={withdrawAddress}
-                    onChange={(e) => setWithdrawAddress(e.target.value)}
-                    className="w-full bg-[#F4F7F5] border border-black px-3 py-2 font-mono text-xs font-bold text-black focus:outline-none"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={withdrawStatus === 'processing'}
-                  className="w-full btn-pro-black py-2.5 text-xs font-black uppercase tracking-wider"
-                >
-                  {withdrawStatus === 'processing' ? 'Broadcasting Remit Instructions...' : 'Verify Balance Settlement Outbound'}
-                </button>
-              </form>
-
-              {withdrawStatus === 'success' && (
-                <div className="p-3.5 bg-[#10B981]/10 border-2 border-[#10B981] text-black font-black text-xs uppercase tracking-wider flex items-center gap-2 mt-4 animate-pulse">
-                  <span>Withdrawal Request Executed Cleanly</span>
-                </div>
-              )}
-              {withdrawStatus === 'error' && (
-                <div className="p-3.5 bg-red-50 border-2 border-red-500 text-red-500 font-black text-xs uppercase tracking-wider flex items-center gap-2 mt-4">
-                  <span>Invalid allocation parameters value limits exception</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB OPTION C: LEDGER LOG HISTORIES EVENT TRACKING REVIEWS */}
-          {activeSubTab === 'history' && (
-            <div className="space-y-3 animate-tab-switch text-xs text-black">
-              <div className="space-y-2">
-                {historyLogs.map((log) => {
-                  const isNegativeVal = log.amount < 0;
-                  return (
-                    <div 
-                      key={log.id}
-                      className="p-3 border-2 border-black bg-white flex items-center justify-between gap-4"
-                    >
-                      <div className="min-w-0 space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[7px] font-black uppercase border px-1 ${
-                            isNegativeVal ? 'bg-red-50 text-red-500 border-red-200' : 'bg-emerald-50 text-emerald-500 border-emerald-200'
-                          }`}>
-                            {log.type}
-                          </span>
-                          <h4 className="text-xs font-black text-black truncate font-mono">
-                            {log.id}
-                          </h4>
-                        </div>
-                        <span className="text-[9px] font-bold text-slate-400 font-mono block">
-                          {log.date}
-                        </span>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <span className={`font-mono text-xs font-black ${
-                          isNegativeVal ? 'text-black' : 'text-[#10B981]'
-                        }`}>
-                          {isNegativeVal ? '' : '+'}{log.amount.toFixed(2)} AR
-                        </span>
-                        <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                          {log.status}
-                        </div>
-                      </div>
+                    <div className="flex items-start gap-2 mt-4 text-xs font-medium text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <p>Send only AR tokens to this address. Ensure the transaction is initiated before the timer expires.</p>
                     </div>
-                  );
-                })}
+                  </div>
+                </div>
+              )}
+
+              {/* Security Badges */}
+              <div className="flex items-center justify-center gap-6 py-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" /> Secure
+                </div>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
+                  <Clock className="w-4 h-4 text-blue-500" /> Fast Sync
+                </div>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
+                  <CheckCircle2 className="w-4 h-4 text-indigo-500" /> Verified
+                </div>
+              </div>
+
+              {/* FAQ Accordion Section */}
+              <div className="border border-slate-100 rounded-2xl overflow-hidden bg-slate-50">
+                <div className="p-4 bg-white border-b border-slate-100">
+                  <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                    <Info className="w-4 h-4 text-slate-400" /> How it works
+                  </h3>
+                </div>
+                <div className="divide-y divide-slate-100 bg-white">
+                  {faqItems.map((item) => {
+                    const isExpanded = expandedFaq === item.id;
+                    return (
+                      <div key={item.id} className="transition-colors hover:bg-slate-50/50">
+                        <button 
+                          onClick={() => toggleFaq(item.id)}
+                          className="w-full flex items-center justify-between p-4 text-left"
+                        >
+                          <span className="text-sm font-bold text-slate-700">{item.question}</span>
+                          {isExpanded ? (
+                            <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                          )}
+                        </button>
+                        {isExpanded && (
+                          <div className="px-4 pb-4 text-sm text-slate-500 font-medium leading-relaxed animate-fade-in">
+                            {item.answer}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* ================================================================
+              TAB: TRANSACTIONS (HISTORY)
+              ================================================================ */}
+          {activeTab === 'history' && (
+            <div className="animate-fade-in h-full flex flex-col">
+              
+              {/* Filters */}
+              <div className="p-4 sm:px-6 border-b border-slate-100 bg-white/90 backdrop-blur-sm sticky top-0 z-10 flex gap-2 overflow-x-auto hide-scrollbar">
+                {[
+                  { id: 'all', label: 'All Activity' },
+                  { id: 'deposit', label: 'Deposits' },
+                  { id: 'spending', label: 'Spending' }
+                ].map(filter => (
+                  <button
+                    key={filter.id}
+                    onClick={() => { AudioEngine.playClick(); setHistoryFilter(filter.id); }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap shrink-0 ${
+                      historyFilter === filter.id 
+                        ? 'bg-slate-900 text-white' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Transaction List */}
+              <div className="flex-1 p-4 sm:p-6 space-y-3 pb-8">
+                {getFilteredHistory().length === 0 ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                      <History className="w-8 h-8 text-slate-300" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-900">No transactions found</p>
+                    <p className="text-xs text-slate-500 font-medium mt-1">Your activity will appear here.</p>
+                  </div>
+                ) : (
+                  getFilteredHistory().map((log) => {
+                    const isPositive = log.amount > 0;
+                    return (
+                      <div 
+                        key={log.id} 
+                        className="p-4 border border-slate-100 bg-white rounded-2xl hover:border-slate-200 hover:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] transition-all flex items-center gap-4 group"
+                      >
+                        {/* Icon Badge */}
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                          log.category === 'deposit' ? 'bg-emerald-50' : 'bg-slate-50'
+                        }`}>
+                          {getTransactionIcon(log.type, log.category)}
+                        </div>
+
+                        {/* Details */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-900 truncate group-hover:text-blue-600 transition-colors">
+                            {log.type}
+                          </p>
+                          <p className="text-xs font-medium text-slate-500 mt-0.5 truncate">
+                            {log.stamp}
+                          </p>
+                        </div>
+
+                        {/* Amount & Status */}
+                        <div className="text-right shrink-0">
+                          <p className={`text-base font-black tracking-tight ${
+                            isPositive ? 'text-emerald-600' : 'text-slate-900'
+                          }`}>
+                            {isPositive ? '+' : ''}{log.amount.toFixed(2)}
+                          </p>
+                          <p className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${
+                            log.status === 'Completed' ? 'text-emerald-500' : 'text-amber-500'
+                          }`}>
+                            {log.status}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}

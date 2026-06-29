@@ -1,8 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { Home, Ticket, Layers, User, Bell, LogOut, Shield, ChevronRight, Menu, X, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Home, 
+  Ticket, 
+  User, 
+  Bell, 
+  Wallet, 
+  LayoutGrid, 
+  LogOut,
+  Settings,
+  HelpCircle,
+  ChevronRight,
+  ChevronDown,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Menu,
+  X
+} from 'lucide-react';
 import { MockAPI } from './services/MockApi.js';
 import { AudioEngine } from './services/AudioEngine.js';
 
+// Import Views
 import HomeView from './views/HomeView.jsx';
 import RaffleView from './views/RaffleView.jsx';
 import MyTicketsView from './views/MyTicketView.jsx';
@@ -10,214 +28,472 @@ import ProfileView from './views/ProfileView.jsx';
 import WalletModal from './components/WalletModal.jsx';
 
 export default function App() {
+  // ---------------------------------------------------------
+  // GLOBAL STATE MANAGEMENT
+  // ---------------------------------------------------------
   const [activeTab, setActiveTab] = useState('home');
   const [userProfile, setUserProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Modals & Trays
   const [isWalletOpen, setIsWalletOpen] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(2);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isNotificationTrayOpen, setIsNotificationTrayOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const reloadProfileContext = async () => {
+  // Router specific states (Deep linking into specific raffles)
+  const [selectedRaffleId, setSelectedRaffleId] = useState(null);
+
+  // Notification State
+  const [unreadCount, setUnreadCount] = useState(3);
+  const [notifications, setNotifications] = useState([
+    { 
+      id: 1, 
+      type: 'success',
+      title: "Task Approved", 
+      message: "Your screenshot proof for the Partner App task was verified successfully. 50 points have been added to your account.", 
+      time: "10 mins ago",
+      isExpanded: false,
+      isRead: false
+    },
+    { 
+      id: 2, 
+      type: 'info',
+      title: "New Raffle Live", 
+      message: "The iPhone 15 Pro Max raffle is now live! Tickets are available for 1 AR each. Don't miss your chance.", 
+      time: "2 hours ago",
+      isExpanded: false,
+      isRead: false
+    },
+    {
+      id: 3,
+      type: 'alert',
+      title: "KYC Verification Reminder",
+      message: "Please complete your identity verification to unlock higher withdrawal limits and premium tasks.",
+      time: "1 day ago",
+      isExpanded: false,
+      isRead: false
+    }
+  ]);
+
+  const notificationRef = useRef(null);
+
+  // ---------------------------------------------------------
+  // INITIALIZATION & DATA FETCHING
+  // ---------------------------------------------------------
+  const reloadUserData = async () => {
     try {
-      const profile = await MockAPI.getProfile();
-      setUserProfile(profile);
+      const data = await MockAPI.getProfile();
+      setUserProfile(data);
     } catch (err) {
-      console.error("Critical Profile Context Desynchronization error: ", err);
+      console.error("Failed to load user profile:", err);
     }
   };
 
   useEffect(() => {
-    async function initSystemContext() {
+    async function initApp() {
       try {
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Standard structural load delay
-        const profile = await MockAPI.getProfile();
-        setUserProfile(profile);
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Smooth loading experience
+        const data = await MockAPI.getProfile();
+        setUserProfile(data);
       } catch (err) {
-        console.error("System configuration initiation fault: ", err);
+        console.error("Initialization Error:", err);
       } finally {
         setIsLoading(false);
       }
     }
-    initSystemContext();
+    initApp();
+
+    // Close notification tray when clicking outside
+    const handleClickOutside = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setIsNotificationTrayOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleTabTransition = (tabId) => {
+  // ---------------------------------------------------------
+  // NAVIGATION & ROUTING HANDLERS
+  // ---------------------------------------------------------
+  const navigateTo = (tabId) => {
     AudioEngine.playClick();
+    setSelectedRaffleId(null); 
     setActiveTab(tabId);
+    setIsMobileMenuOpen(false);
+    setIsNotificationTrayOpen(false);
   };
 
+  const navigateToSpecificRaffle = (raffleId) => {
+    AudioEngine.playClick();
+    setSelectedRaffleId(raffleId);
+    setActiveTab('raffle');
+  };
+
+  // ---------------------------------------------------------
+  // NOTIFICATION HANDLERS
+  // ---------------------------------------------------------
+  const toggleNotification = (id) => {
+    AudioEngine.playClick();
+    setNotifications(prev => prev.map(notif => {
+      if (notif.id === id) {
+        // Mark as read when expanded
+        if (!notif.isRead && !notif.isExpanded) {
+          setUnreadCount(Math.max(0, unreadCount - 1));
+        }
+        return { ...notif, isExpanded: !notif.isExpanded, isRead: true };
+      }
+      return notif;
+    }));
+  };
+
+  const markAllAsRead = () => {
+    AudioEngine.playClick();
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true, isExpanded: false })));
+    setUnreadCount(0);
+  };
+
+  // ---------------------------------------------------------
+  // RENDER: LOADING STATE
+  // ---------------------------------------------------------
   if (isLoading) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-[#FFFFFF] select-none">
-        <section className="dots-container">
-          <div className="dot"></div>
-          <div className="dot"></div>
-          <div className="dot"></div>
-        </section>
-        <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-black mt-4">
-          Loading System Schema
-        </span>
+      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-6 animate-pop-in">
+          <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center shadow-xl shadow-blue-600/30">
+            <span className="text-3xl font-black text-white tracking-tighter">A</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-2.5 h-2.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="w-2.5 h-2.5 bg-blue-200 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+          <p className="text-sm font-semibold text-slate-500">Loading your workspace...</p>
+        </div>
       </div>
     );
   }
 
-  const menuItemsList = [
-    { id: 'home', label: 'Pools Overview', icon: Home },
-    { id: 'raffle', label: 'Raffle Active Arena', icon: Layers },
-    { id: 'tickets', label: 'My Participation Stakes', icon: Ticket },
-    { id: 'profile', label: 'Account Profile Nodes', icon: User }
+  // Define Core Navigation Links
+  const navigationLinks = [
+    { id: 'home', label: 'Home', icon: Home },
+    { id: 'raffle', label: 'Raffles', icon: LayoutGrid },
+    { id: 'tickets', label: 'My Tickets', icon: Ticket },
+    { id: 'profile', label: 'Profile', icon: User }
   ];
 
   return (
-    <div className="w-full h-full flex bg-[#FFFFFF] text-[#000000] relative overflow-hidden select-none">
+    <div className="w-full h-full flex bg-slate-50 text-slate-900 font-sans overflow-hidden">
       
-      {/* 💻 DESKTOP LAYOUT INTEGRAL NAVIGATION SIDEBAR (HIDDEN ON MOBILE THROUGH WINDOW BREAKS) */}
-      <aside className={`hidden md:flex flex-col justify-between border-r-2 border-[#000000] h-full bg-[#FFFFFF] transition-all duration-300 z-30 shrink-0 ${
-        sidebarCollapsed ? 'w-20' : 'w-72'
-      }`}>
-        <div className="w-full flex flex-col">
-          {/* Brand Panel header identity title block area */}
-          <div className="h-20 border-b-2 border-[#000000] px-6 flex items-center justify-between">
-            {!sidebarCollapsed && (
-              <span className="text-sm font-black tracking-[0.3em] uppercase text-black">
-                ANONROOM
-              </span>
-            )}
-            <button 
-              onClick={() => { AudioEngine.playClick(); setSidebarCollapsed(!sidebarCollapsed); }}
-              className="p-1 border-2 border-black bg-white text-black hover:bg-black hover:text-white transition-colors ml-auto"
-            >
-              {sidebarCollapsed ? <ChevronRight className="w-4 h-4" strokeWidth={2.5} /> : <ArrowLeft className="w-4 h-4" strokeWidth={2.5} />}
-            </button>
+      {/* =========================================================
+          DESKTOP SIDEBAR
+          ========================================================= */}
+      <aside className="hidden lg:flex flex-col w-[280px] bg-white border-r border-slate-200 h-full z-20 shrink-0">
+        
+        {/* Logo & Brand */}
+        <div className="h-20 flex items-center px-8 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center shadow-md shadow-blue-600/20">
+              <span className="text-lg font-black text-white">A</span>
+            </div>
+            <span className="text-xl font-bold tracking-tight text-slate-900">AnonRoom</span>
           </div>
+        </div>
 
-          {/* Nav Row Map Navigation Iteration */}
-          <nav className="p-4 space-y-2 flex flex-col w-full">
-            {menuItemsList.map((item) => {
-              const Icon = item.icon;
-              const isSelected = activeTab === item.id;
+        {/* Main Navigation */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 flex flex-col gap-8">
+          <nav className="space-y-1.5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-3">Main Menu</p>
+            {navigationLinks.map((nav) => {
+              const Icon = nav.icon;
+              const isActive = activeTab === nav.id;
               return (
                 <button
-                  key={item.id}
-                  onClick={() => handleTabTransition(item.id)}
-                  className={`w-full flex items-center gap-4 px-4 py-3 border-2 transition-all text-left text-xs font-black uppercase tracking-wider ${
-                    isSelected 
-                      ? 'bg-[#000000] border-[#000000] text-[#FFFFFF]' 
-                      : 'bg-transparent border-transparent text-[#000000] hover:border-black'
+                  key={nav.id}
+                  onClick={() => navigateTo(nav.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all ${
+                    isActive 
+                      ? 'bg-blue-50 text-blue-700 shadow-sm shadow-blue-100' 
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                 >
-                  <Icon className="w-4 h-4 shrink-0" strokeWidth={2.5} />
-                  {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                  <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+                  {nav.label}
                 </button>
               );
             })}
           </nav>
+
+          {/* Secondary Links */}
+          <nav className="space-y-1.5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-3">Quick Links</p>
+            <button onClick={() => navigateTo('profile')} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all">
+              <Settings className="w-4 h-4" /> Account Settings
+            </button>
+            <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all">
+              <HelpCircle className="w-4 h-4" /> Help & Support
+            </button>
+          </nav>
         </div>
 
-        {/* Desktop Profile Node summary identity footer parameters card */}
-        {!sidebarCollapsed && userProfile && (
-          <div className="p-4 border-t-2 border-[#000000] bg-[#F9F9F9] m-4 border-2 flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 border-2 border-black bg-black text-white text-xs font-black flex items-center justify-center">
-                VS
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-black text-black truncate">{userProfile.username}</div>
-                <div className="text-[9px] font-bold text-slate-400 truncate">ID: {userProfile.user_id}</div>
-              </div>
+        {/* User Mini Profile Footer */}
+        <div className="p-5 border-t border-slate-100">
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/60 shadow-sm flex items-center gap-3 cursor-pointer hover:bg-slate-100 transition-all" onClick={() => navigateTo('profile')}>
+            <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 font-bold shrink-0">
+              VS
             </div>
-            <button 
-              onClick={() => { AudioEngine.playClick(); setIsWalletOpen(true); }}
-              className="w-full btn-pro-emerald py-2 text-[10px]"
-            >
-              Wallet Terminal
-            </button>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-slate-900 truncate">{userProfile?.username || 'User'}</p>
+              <p className="text-xs text-slate-500 font-medium truncate">View Profile</p>
+            </div>
           </div>
-        )}
+        </div>
       </aside>
 
-      {/* VIEWPORT CONTROLLER SURFACE RIG FRAME CHASSIS AREA */}
-      <div className="flex-1 h-full flex flex-col overflow-hidden relative">
+      {/* =========================================================
+          MAIN APPLICATION VIEWPORT
+          ========================================================= */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         
-        {/* UNIVERSAL APPLICATION HEADER CONTENT CONTROL BAR */}
-        <header className="w-full h-20 border-b-2 border-[#000000] px-6 flex items-center justify-between bg-white z-20 shrink-0">
-          <div className="flex items-center gap-4">
-            <span className="md:hidden text-xs font-black tracking-widest uppercase text-black">
-              ANONROOM
-            </span>
-            <div className="hidden md:flex items-center gap-2">
-              <Shield className="w-4 h-4 text-[#10B981]" strokeWidth={2.5} />
-              <span className="text-[10px] uppercase tracking-widest font-black text-slate-400">
-                Verified Cryptographic Client Application Interface Matrix
-              </span>
+        {/* -----------------------------------------------------
+            TOP HEADER NAVIGATION BAR
+            ----------------------------------------------------- */}
+        <header className="h-16 lg:h-20 bg-white/80 backdrop-blur-xl border-b border-slate-200 px-4 lg:px-8 flex items-center justify-between z-30 shrink-0 shadow-sm relative">
+          
+          {/* Mobile Left Side: Menu + Logo */}
+          <div className="flex items-center gap-3 lg:hidden">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm">
+                <span className="text-sm font-black text-white">A</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            {/* Quick Wallet Context State trigger node */}
+          {/* Desktop Left Side: Page Title / Breadcrumbs */}
+          <div className="hidden lg:flex items-center gap-2 text-sm font-semibold">
+            <span className="text-slate-400">Dashboard</span>
+            <ChevronRight className="w-4 h-4 text-slate-300" />
+            <span className="text-slate-900 capitalize">
+              {activeTab === 'raffle' ? 'Raffles' : activeTab.replace('mytickets', 'My Tickets')}
+            </span>
+          </div>
+
+          {/* Right Side: Wallet & Notifications */}
+          <div className="flex items-center gap-2 lg:gap-4">
+            
+            {/* Standard Wallet Button */}
             <button
               onClick={() => { AudioEngine.playClick(); setIsWalletOpen(true); }}
-              className="px-4 py-2 border-2 border-black text-xs font-black bg-white text-black hover:bg-black hover:text-white transition-colors"
+              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 px-3 py-2 rounded-xl text-sm font-bold transition-all active:scale-95"
             >
-              {userProfile?.ar_balance?.toFixed(2)} AR
+              <Wallet className="w-4 h-4 text-slate-500" />
+              <span className="font-mono">{userProfile?.ar_balance?.toFixed(2) || '0.00'} AR</span>
             </button>
 
-            {/* Notification bell anchor frame wrapper */}
-            <button 
-              onClick={() => handleTabTransition('profile')}
-              className="p-2 border-2 border-black bg-white relative hover:bg-slate-50 transition-colors"
-            >
-              <Bell className="w-4 h-4 text-black" strokeWidth={2.5} />
-              {notificationCount > 0 && (
-                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#10B981] border-2 border-black text-[8px] font-black flex items-center justify-center rounded-none">
-                  {notificationCount}
+            {/* Notification Bell Wrapper */}
+            <div className="relative" ref={notificationRef}>
+              <button
+                onClick={() => { AudioEngine.playClick(); setIsNotificationTrayOpen(!isNotificationTrayOpen); }}
+                className={`p-2.5 rounded-xl transition-all border relative ${
+                  isNotificationTrayOpen 
+                    ? 'bg-blue-50 border-blue-200 text-blue-600' 
+                    : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-2 right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full"></span>
+                )}
+              </button>
+
+              {/* -----------------------------------------------------
+                  NOTIFICATION TRAY (Click to Expand logic built-in)
+                  ----------------------------------------------------- */}
+              {isNotificationTrayOpen && (
+                <div className="absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200 overflow-hidden animate-slide-up z-50">
+                  <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <h3 className="font-bold text-slate-900">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllAsRead} className="text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded-lg">
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-[400px] overflow-y-auto custom-scrollbar flex flex-col">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-sm font-medium">
+                        You have no new notifications.
+                      </div>
+                    ) : (
+                      notifications.map((notif) => (
+                        <div 
+                          key={notif.id} 
+                          className={`border-b border-slate-100 last:border-0 transition-colors ${notif.isRead ? 'bg-white' : 'bg-blue-50/30'}`}
+                        >
+                          <div 
+                            onClick={() => toggleNotification(notif.id)}
+                            className="p-4 flex gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                          >
+                            <div className="shrink-0 mt-0.5">
+                              {notif.type === 'success' && <CheckCircle2 className="w-5 h-5 text-green-500" />}
+                              {notif.type === 'info' && <Bell className="w-5 h-5 text-blue-500" />}
+                              {notif.type === 'alert' && <AlertCircle className="w-5 h-5 text-amber-500" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <h4 className={`text-sm font-bold truncate ${notif.isRead ? 'text-slate-700' : 'text-slate-900'}`}>
+                                  {notif.title}
+                                </h4>
+                                <span className="text-[10px] font-medium text-slate-400 shrink-0 ml-2">{notif.time}</span>
+                              </div>
+                              
+                              {/* Standard text preview if closed */}
+                              {!notif.isExpanded && (
+                                <p className="text-xs text-slate-500 truncate">{notif.message}</p>
+                              )}
+
+                              {/* Expanded full message */}
+                              {notif.isExpanded && (
+                                <div className="mt-2 text-xs text-slate-600 leading-relaxed animate-fade-in bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                  {notif.message}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
-            </button>
+            </div>
           </div>
         </header>
 
-        {/* SCREEN MODULE INJECTION CHASSIS AREA VIEWPORT */}
-        <main className="w-full h-full flex-1 overflow-hidden relative bg-[#FFFFFF]">
-          <div 
-            key={activeTab}
-            className="w-full h-full overflow-y-auto custom-scrollbar p-6 pb-32 animate-tab-switch"
-          >
-            {activeTab === 'home' && <HomeView onTabChange={handleTabTransition} />}
-            {activeTab === 'raffle' && <RaffleView />}
-            {activeTab === 'tickets' && <MyTicketsView onTabChange={handleTabTransition} />}
-            {activeTab === 'profile' && <ProfileView userProfile={userProfile} onOpenWallet={() => setIsWalletOpen(true)} />}
+        {/* -----------------------------------------------------
+            MAIN CONTENT AREA INJECTION (SCROLLABLE)
+            ----------------------------------------------------- */}
+        <main className="flex-1 overflow-y-auto custom-scrollbar relative bg-slate-50">
+          <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 pb-32 lg:pb-12 animate-fade-in min-h-full">
+            {activeTab === 'home' && (
+              <HomeView 
+                onTabChange={navigateTo} 
+                onSelectRaffle={navigateToSpecificRaffle} 
+              />
+            )}
+            {activeTab === 'raffle' && (
+              <RaffleView 
+                targetRaffleId={selectedRaffleId} 
+                clearTarget={() => setSelectedRaffleId(null)} 
+              />
+            )}
+            {activeTab === 'tickets' && (
+              <MyTicketsView />
+            )}
+            {activeTab === 'profile' && (
+              <ProfileView 
+                userProfile={userProfile} 
+                onOpenWallet={() => setIsWalletOpen(true)} 
+              />
+            )}
           </div>
         </main>
 
-        {/* 📱 MOBILE NAVIGATION BOTTOM BANNER RAIL (AUTO-COLLAPSES ON PC DISPLAYS VIA IN-LINE CSS QUERIES) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t-2 border-black flex items-center justify-around z-30 pb-safe">
-          {menuItemsList.map((item) => {
-            const IconComponent = item.icon;
-            const isCurrent = activeTab === item.id;
+        {/* -----------------------------------------------------
+            MOBILE BOTTOM NAVIGATION BAR (Hidden on Desktop)
+            ----------------------------------------------------- */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-[72px] bg-white/90 backdrop-blur-xl border-t border-slate-200 flex items-center justify-around pb-safe z-40 px-2 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+          {navigationLinks.map((tab) => {
+            const IconComponent = tab.icon;
+            const isActive = activeTab === tab.id;
             return (
               <button
-                key={item.id}
-                onClick={() => handleTabTransition(item.id)}
-                className={`flex flex-col items-center justify-center gap-0.5 w-16 h-full text-center transition-all ${
-                  isCurrent ? 'text-[#10B981] font-black scale-105' : 'text-slate-400 font-bold'
-                }`}
+                key={tab.id}
+                onClick={() => navigateTo(tab.id)}
+                className="flex flex-col items-center justify-center w-full h-full relative group"
               >
-                <IconComponent className="w-5 h-5" strokeWidth={isCurrent ? 3 : 2} />
-                <span className="text-[8px] uppercase tracking-wider font-mono">{item.id}</span>
+                <div className={`flex flex-col items-center justify-center transition-all duration-300 ${
+                  isActive ? '-translate-y-1' : ''
+                }`}>
+                  <div className={`p-1.5 rounded-xl transition-all duration-300 ${
+                    isActive ? 'bg-blue-100 text-blue-600' : 'text-slate-400 group-hover:text-slate-600 group-hover:bg-slate-100'
+                  }`}>
+                    <IconComponent className="w-5 h-5" strokeWidth={isActive ? 2.5 : 2} />
+                  </div>
+                  <span className={`text-[10px] font-bold mt-1 transition-all duration-300 ${
+                    isActive ? 'text-blue-600 opacity-100' : 'text-slate-500 opacity-80 group-hover:opacity-100'
+                  }`}>
+                    {tab.label}
+                  </span>
+                </div>
               </button>
             );
           })}
         </nav>
 
+        {/* -----------------------------------------------------
+            MOBILE FULL-SCREEN SLIDE MENU (Drawer)
+            ----------------------------------------------------- */}
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden flex">
+            {/* Backdrop */}
+            <div 
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-fade-in"
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+            {/* Panel */}
+            <div className="relative w-[280px] max-w-[80%] h-full bg-white shadow-2xl animate-slide-up sm:animate-fade-in flex flex-col">
+              <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100">
+                <span className="text-lg font-bold text-slate-900">Menu</span>
+                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-100 text-slate-600 rounded-full">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="p-4 flex-1 overflow-y-auto">
+                <div className="bg-slate-50 p-4 rounded-2xl flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">
+                    VS
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900">{userProfile?.username}</h3>
+                    <p className="text-xs font-medium text-slate-500">ID: {userProfile?.user_id}</p>
+                  </div>
+                </div>
+
+                <nav className="space-y-2">
+                  <button onClick={() => navigateTo('profile')} className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
+                    <Settings className="w-5 h-5 text-slate-400" /> Settings & Profile
+                  </button>
+                  <button className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
+                    <HelpCircle className="w-5 h-5 text-slate-400" /> Help & Support
+                  </button>
+                  <button className="w-full flex items-center gap-3 px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-100 rounded-2xl font-semibold text-red-600 transition-colors mt-8">
+                    <LogOut className="w-5 h-5" /> Sign Out
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
 
-      {/* CORE SECURE BALANCES INJECTION BOX MODAL DRAWER OVERLAY */}
+      {/* =========================================================
+          GLOBAL MODALS INJECTION
+          ========================================================= */}
       <WalletModal 
         isOpen={isWalletOpen}
-        onClose={() => { setIsWalletOpen(false); reloadProfileContext(); }}
+        onClose={() => { setIsWalletOpen(false); reloadUserData(); }}
         userProfile={userProfile}
-        onBalanceUpdate={reloadProfileContext}
+        onBalanceUpdate={reloadUserData}
       />
 
     </div>
