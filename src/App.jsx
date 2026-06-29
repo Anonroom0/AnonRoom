@@ -18,7 +18,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Menu,
-  X
+  X,
+  Gift,
+  Users
 } from 'lucide-react';
 import { MockAPI } from './services/MockApi.js';
 import { AudioEngine } from './services/AudioEngine.js';
@@ -27,6 +29,7 @@ import { AudioEngine } from './services/AudioEngine.js';
 import HomeView from './views/HomeView.jsx';
 import RaffleView from './views/RaffleView.jsx';
 import MyTicketsView from './views/MyTicketView.jsx';
+import RedeemView from './views/ReedemView.jsx';
 import ProfileView from './views/ProfileView.jsx';
 import WalletModal from './components/WalletModal.jsx';
 
@@ -120,29 +123,47 @@ export default function App() {
   // ---------------------------------------------------------
   // NAVIGATION & ROUTING HANDLERS
   // ---------------------------------------------------------
-  const navigateTo = (tabId) => {
-    AudioEngine.playClick();
-    setSelectedRaffleId(null); 
-    setActiveTab(tabId);
-    setIsMobileMenuOpen(false);
-    setIsNotificationTrayOpen(false);
-  };
-
   const navigateToSpecificRaffle = (raffleId) => {
     AudioEngine.playClick();
     setSelectedRaffleId(raffleId);
     setActiveTab('raffle');
+    setIsMobileMenuOpen(false);
+    setIsNotificationTrayOpen(false);
   };
+
   const handleOpenWallet = () => {
-  // Add your logic to open the wallet modal or page here
-  console.log("Opening Wallet...");
-  // Example: setActiveTab('wallet');
-};
+    // Add your logic to open the wallet modal or page here
+    console.log("Opening Wallet...");
+    // Example: setActiveTab('wallet');
+  };
+
+  const navigateTo = (tabId) => {
+    AudioEngine.playClick();
+    setSelectedRaffleId(null);
+
+    const profileSubPages = ['menu', 'tasks', 'rewards', 'winnings', 'shipments', 'referrals', 'notifications', 'faqs', 'kyc'];
+    if (profileSubPages.includes(tabId)) {
+      setActiveTab('profile');
+      setProfileSubPage(tabId === 'menu' ? 'menu' : tabId);
+    } else {
+      setActiveTab(tabId);
+    }
+
+    setIsMobileMenuOpen(false);
+    setIsNotificationTrayOpen(false);
+  };
 
   const handleProfileDeepLink = (targetPage) => {
     setProfileSubPage(targetPage);
     setActiveTab('profile'); // NOTE: If your app uses a different word to change tabs (like setCurrentTab), change this word to match!
   };
+
+  const handleMobileProfileRoute = (targetPage = 'menu') => {
+    handleProfileDeepLink(targetPage);
+    setIsMobileMenuOpen(false);
+    setIsNotificationTrayOpen(false);
+  };
+
   const handleRaffleClick = (raffleId = null) => {
     AudioEngine.playClick();
     setSelectedRaffleId(raffleId);
@@ -206,6 +227,7 @@ export default function App() {
     { id: 'home', label: 'Home', icon: Home },
     { id: 'raffle', label: 'Raffles', icon: LayoutGrid },
     { id: 'tickets', label: 'My Tickets', icon: Ticket },
+    { id: 'redeem', label: 'Redeem', icon: Gift },
     { id: 'profile', label: 'Profile', icon: User }
   ];
 
@@ -314,7 +336,7 @@ export default function App() {
             <span className="text-slate-400">Dashboard</span>
             <ChevronRight className="w-4 h-4 text-slate-300" />
             <span className="text-slate-900 capitalize">
-              {safeActiveTab === 'raffle' ? 'Raffles' : String(safeActiveTab).replace('mytickets', 'My Tickets')}
+              {safeActiveTab === 'raffle' ? 'Raffles' : safeActiveTab === 'redeem' ? 'Redeem' : String(safeActiveTab).replace('mytickets', 'My Tickets')}
             </span>
           </div>
 
@@ -464,6 +486,13 @@ export default function App() {
   />
 )}
 
+           {safeActiveTab === 'redeem' && (
+  <RedeemView 
+    userProfile={safeUserProfile}
+    navigateTo={(target) => navigateTo(target)}
+  />
+)}
+
            {safeActiveTab === 'profile' && (
   <ProfileView 
     userProfile={safeUserProfile} 
@@ -523,7 +552,7 @@ export default function App() {
               onClick={() => setIsMobileMenuOpen(false)}
             />
             {/* Panel */}
-            <div className="relative w-[280px] max-w-[80%] h-full bg-white shadow-2xl animate-slide-up sm:animate-fade-in flex flex-col">
+            <div className="relative w-[280px] max-w-[80%] h-full bg-white shadow-2xl animate-slide-in-left flex flex-col">
               <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100">
                 <span className="text-lg font-bold text-slate-900">Menu</span>
                 <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-100 text-slate-600 rounded-full">
@@ -543,11 +572,26 @@ export default function App() {
                 </div>
 
                 <nav className="space-y-2">
-                  <button onClick={() => navigateTo('profile')} className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
-                    <Settings className="w-5 h-5 text-slate-400" /> Settings & Profile
+                  <button onClick={() => handleMobileProfileRoute('menu')} className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
+                    <User className="w-5 h-5 text-slate-400" /> Profile Home
                   </button>
-                  <button className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
-                    <HelpCircle className="w-5 h-5 text-slate-400" /> Help & Support
+                  <button onClick={() => handleMobileProfileRoute('tasks')} className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
+                    <CheckCircle2 className="w-5 h-5 text-slate-400" /> Complete Tasks
+                  </button>
+                  <button onClick={() => handleMobileProfileRoute('rewards')} className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
+                    <Gift className="w-5 h-5 text-slate-400" /> Rewards Center
+                  </button>
+                  <button onClick={() => handleMobileProfileRoute('referrals')} className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
+                    <Users className="w-5 h-5 text-slate-400" /> Referral Hub
+                  </button>
+                  <button onClick={() => handleMobileProfileRoute('notifications')} className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
+                    <Bell className="w-5 h-5 text-slate-400" /> Notifications
+                  </button>
+                  <button onClick={() => handleMobileProfileRoute('faqs')} className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
+                    <HelpCircle className="w-5 h-5 text-slate-400" /> Help & FAQ
+                  </button>
+                  <button onClick={() => handleMobileProfileRoute('kyc')} className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
+                    <Settings className="w-5 h-5 text-slate-400" /> KYC & Verification
                   </button>
                   <button className="w-full flex items-center gap-3 px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-100 rounded-2xl font-semibold text-red-600 transition-colors mt-8">
                     <LogOut className="w-5 h-5" /> Sign Out
