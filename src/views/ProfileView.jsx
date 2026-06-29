@@ -19,7 +19,7 @@ import DocumentReader from './Profile/DocumentReader';
  * Acts as the secure router for the entire profile ecosystem. 
  * Manages the active page state and safely loads the modular components.
  */
-export default function ProfileView({ userProfile, onOpenWallet, initialPage = 'menu' }) {
+export default function ProfileView({ userProfile, onOpenWallet, initialPage = 'menu', onSignOut }) {
   // ROUTING STATE
   const [activePage, setActivePage] = useState(initialPage);
   const [activeDocument, setActiveDocument] = useState(null);
@@ -47,7 +47,7 @@ export default function ProfileView({ userProfile, onOpenWallet, initialPage = '
   return (
     <div className="w-full relative min-h-screen">
       {activePage === 'menu' && (
-        <ProfileMenu navigateTo={navigateTo} userProfile={userProfile} />
+        <ProfileMenu navigateTo={navigateTo} userProfile={userProfile} onSignOut={onSignOut} />
       )}
       
       {activePage === 'tasks' && (

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { MockAPI } from './services/MockApi.js';
 import { AudioEngine } from './services/AudioEngine.js';
+import { SupabaseService } from './services/SupabaseService.js';
 
 // Import Views
 import HomeView from './views/HomeView.jsx';
@@ -137,6 +138,27 @@ export default function App() {
     // Add your logic to open the wallet modal or page here
     console.log("Opening Wallet...");
     // Example: setActiveTab('wallet');
+  };
+
+  const handleSignOut = async () => {
+    AudioEngine.playClick();
+    const confirmLogout = window.confirm("Are you sure you want to securely sign out of your AnonRoom account?");
+    if (!confirmLogout) return;
+
+    try {
+      await SupabaseService.signOut();
+      setUserProfile(null);
+      setIsAuthenticated(false);
+      setActiveTab('home');
+      setProfileSubPage('menu');
+      setSelectedRaffleId(null);
+      setIsMobileMenuOpen(false);
+      setIsNotificationTrayOpen(false);
+      setIsWalletOpen(false);
+    } catch (error) {
+      console.error('Sign out failed:', error);
+      alert('Unable to sign out right now. Please try again.');
+    }
   };
 
   const navigateTo = (tabId) => {
@@ -503,6 +525,7 @@ export default function App() {
         handleOpenWallet();
       }
     }}
+    onSignOut={handleSignOut}
     initialPage={safeInitialPage} 
   />
 )}
@@ -595,7 +618,10 @@ export default function App() {
                   <button onClick={() => handleMobileProfileRoute('kyc')} className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 border border-slate-100 rounded-2xl font-semibold text-slate-700 transition-colors">
                     <Settings className="w-5 h-5 text-slate-400" /> KYC & Verification
                   </button>
-                  <button className="w-full flex items-center gap-3 px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-100 rounded-2xl font-semibold text-red-600 transition-colors mt-8">
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-100 rounded-2xl font-semibold text-red-600 transition-colors mt-8"
+                  >
                     <LogOut className="w-5 h-5" /> Sign Out
                   </button>
                 </nav>

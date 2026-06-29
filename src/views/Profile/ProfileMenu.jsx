@@ -13,14 +13,15 @@ import { AudioEngine } from '../../services/AudioEngine.js';
  * Features a dynamic overlapping header, beautifully aligned flex-avatar layout,
  * and high-fidelity hover interactions for all menu items.
  */
-export default function ProfileMenu({ navigateTo, userProfile }) {
+export default function ProfileMenu({ navigateTo, userProfile, onSignOut }) {
   
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     AudioEngine.playClick();
     const confirmLogout = window.confirm("Are you sure you want to securely sign out of your AnonRoom account?");
-    if(confirmLogout) {
-      alert("Signed out successfully. Returning to secure gateway...");
-      // Add secure token wipe logic here
+    if (!confirmLogout) return;
+
+    if (typeof onSignOut === 'function') {
+      await onSignOut();
     }
   };
 
