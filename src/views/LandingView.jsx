@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { 
   ArrowRight, Zap, Shield, Gift, Mail, Lock, User, X, ChevronRight, Coins
 } from 'lucide-react';
+import { SupabaseService } from '../services/SupabaseService';
 
 export default function LandingView({ onAuthenticate }) {
   // 'idle' | 'signIn' | 'signUp'
@@ -11,12 +12,31 @@ export default function LandingView({ onAuthenticate }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // For now, this immediately logs the user in.
-    // Later, you will connect this to Supabase auth!
-    onAuthenticate({ email, name: name || 'User' });
+    setIsLoading(true);
+    setErrorMsg('');
+
+    try {
+      const isLogin = authMode === 'signIn';
+
+      if (isLogin) {
+        await SupabaseService.signIn(email, password);
+      } else {
+        await SupabaseService.signUp(email, password, name);
+      }
+
+      const session = await SupabaseService.getSession();
+      const profile = await SupabaseService.getUserProfile(session.user.id);
+      onAuthenticate(profile);
+    } catch (error) {
+      setErrorMsg(error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -90,11 +110,18 @@ export default function LandingView({ onAuthenticate }) {
                 />
               </div>
 
+              {errorMsg && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
+                  {errorMsg}
+                </div>
+              )}
+
               <button 
                 type="submit"
-                className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95 mt-4"
+                disabled={isLoading}
+                className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95 mt-4 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isLogin ? 'Sign In' : 'Create Account'}
+                {isLoading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}
               </button>
             </form>
 
