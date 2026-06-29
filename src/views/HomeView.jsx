@@ -139,8 +139,8 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
   const handleBannerClick = (bannerId) => {
     AudioEngine.playClick();
     if (bannerId === 1) onTabChange('raffle');
-    if (bannerId === 2) onTabChange('profile'); // Assuming tasks are in profile
-    if (bannerId === 3) onTabChange('profile'); // Assuming rewards are in profile
+    if (bannerId === 2) onDeepLink('tasks');
+    if (bannerId === 3) onDeepLink('rewards');
   };
 
   // ---------------------------------------------------------------------------
@@ -266,7 +266,7 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
 
         {/* Stat Card 2: Reward Points */}
         <div 
-          onClick={() => { AudioEngine.playClick(); onTabChange('profile'); }} // assuming profile holds rewards/tasks
+          onClick={() => { AudioEngine.playClick(); onDeepLink('rewards'); }}
           className="card-hoverable p-5 flex flex-col justify-between h-[120px] group"
         >
           <div className="flex items-start justify-between w-full">
@@ -308,6 +308,8 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
             const percentSold = Math.round((raffle.tickets_sold / raffle.total_tickets) * 100);
             
             return (
+              // Inside your raffles.map loop:
+
               <div 
                 key={raffle.id}
                 className="min-w-[240px] w-[240px] bg-white border border-slate-100 rounded-[1.25rem] overflow-hidden shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] snap-start shrink-0 flex flex-col group cursor-pointer transition-all hover:shadow-[0_8px_24px_-4px_rgba(0,0,0,0.08)]"
@@ -356,6 +358,7 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
                   </div>
                 </div>
               </div>
+
             );
           })}
         </div>
@@ -412,7 +415,7 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
       {/* 4. "WAYS TO EARN" QUICK LINKS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div 
-          onClick={() => { AudioEngine.playClick(); onTabChange('profile'); }} 
+          onClick={() => { AudioEngine.playClick(); onDeepLink('tasks'); }} 
           className="card-hoverable p-5 flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100/50"
         >
           <div className="flex items-center gap-4">

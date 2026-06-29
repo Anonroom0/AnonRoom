@@ -35,7 +35,8 @@ export default function App() {
   // GLOBAL STATE MANAGEMENT
   // ---------------------------------------------------------
   const [activeTab, setActiveTab] = useState('home');
-  const [userProfile, setUserProfile] = useState(null);
+  const [profileSubPage, setProfileSubPage] = useState('menu');
+  const [userProfile, setUserProfile] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   
   // Modals & Trays
@@ -132,8 +133,6 @@ export default function App() {
     setSelectedRaffleId(raffleId);
     setActiveTab('raffle');
   };
-    // 👉 PASTE THIS MISSING CODE inside your App function:
-  const [profileSubPage, setProfileSubPage] = useState('menu');
   const handleOpenWallet = () => {
   // Add your logic to open the wallet modal or page here
   console.log("Opening Wallet...");
@@ -144,10 +143,13 @@ export default function App() {
     setProfileSubPage(targetPage);
     setActiveTab('profile'); // NOTE: If your app uses a different word to change tabs (like setCurrentTab), change this word to match!
   };
-  const handleRaffleClick = () => {
-  // Add your logic to open the raffle page here
-  setActiveTab('raffles'); // Or whatever the tab name is for your raffle section
-};
+  const handleRaffleClick = (raffleId = null) => {
+    AudioEngine.playClick();
+    setSelectedRaffleId(raffleId);
+    setActiveTab('raffle');
+    setIsMobileMenuOpen(false);
+    setIsNotificationTrayOpen(false);
+  };
 
   // ---------------------------------------------------------
   // NOTIFICATION HANDLERS
@@ -195,6 +197,10 @@ export default function App() {
     );
   }
 
+  const safeActiveTab = activeTab || 'home';
+  const safeUserProfile = userProfile || {};
+  const safeInitialPage = profileSubPage || 'menu';
+
   // Define Core Navigation Links
   const navigationLinks = [
     { id: 'home', label: 'Home', icon: Home },
@@ -228,7 +234,7 @@ export default function App() {
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-3">Main Menu</p>
             {navigationLinks.map((nav) => {
               const Icon = nav.icon;
-              const isActive = activeTab === nav.id;
+              const isActive = safeActiveTab === nav.id;
               return (
                 <button
                   key={nav.id}
@@ -308,7 +314,7 @@ export default function App() {
             <span className="text-slate-400">Dashboard</span>
             <ChevronRight className="w-4 h-4 text-slate-300" />
             <span className="text-slate-900 capitalize">
-              {activeTab === 'raffle' ? 'Raffles' : activeTab.replace('mytickets', 'My Tickets')}
+              {safeActiveTab === 'raffle' ? 'Raffles' : String(safeActiveTab).replace('mytickets', 'My Tickets')}
             </span>
           </div>
 
@@ -410,34 +416,63 @@ export default function App() {
             ----------------------------------------------------- */}
         <main className="flex-1 overflow-y-auto custom-scrollbar relative bg-slate-50">
           <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 pb-32 lg:pb-12 animate-fade-in min-h-full">
-            {activeTab === 'home' && (
+            {safeActiveTab === 'home' && (
   <HomeView 
-    userProfile={userProfile}
-    onDeepLink={handleProfileDeepLink}
-    onTabChange={setActiveTab}
-    onSelectRaffle={handleRaffleClick} // This is what the app was looking for!
+    userProfile={safeUserProfile}
+    onDeepLink={(target) => {
+      if (typeof handleProfileDeepLink === 'function') {
+        handleProfileDeepLink(target);
+      } else {
+        setProfileSubPage(target || 'menu');
+        setActiveTab('profile');
+      }
+    }}
+    onTabChange={(tab) => {
+      if (typeof setActiveTab === 'function') {
+        setActiveTab(tab || 'home');
+      }
+    }}
+    onSelectRaffle={(raffleId) => {
+      if (typeof handleRaffleClick === 'function') {
+        handleRaffleClick(raffleId);
+      } else if (typeof navigateToSpecificRaffle === 'function') {
+        navigateToSpecificRaffle(raffleId);
+      }
+    }}
   />
 )}
 
 
-            {activeTab === 'raffle' && (
+            {safeActiveTab === 'raffle' && (
               <RaffleView 
                 targetRaffleId={selectedRaffleId} 
                 clearTarget={() => setSelectedRaffleId(null)} 
               />
             )}
-           {activeTab === 'tickets' && (
+           {safeActiveTab === 'tickets' && (
   <MyTicketsView 
-    onTabChange={navigateTo} 
-    onSelectRaffle={navigateToSpecificRaffle} 
+    onTabChange={(tab) => {
+      if (typeof navigateTo === 'function') {
+        navigateTo(tab);
+      }
+    }}
+    onSelectRaffle={(raffleId) => {
+      if (typeof navigateToSpecificRaffle === 'function') {
+        navigateToSpecificRaffle(raffleId);
+      }
+    }}
   />
 )}
 
-           {activeTab === 'profile' && (
+           {safeActiveTab === 'profile' && (
   <ProfileView 
-    userProfile={userProfile} 
-    onOpenWallet={handleOpenWallet} // <--- This must be here
-    initialPage={profileSubPage} 
+    userProfile={safeUserProfile} 
+    onOpenWallet={() => {
+      if (typeof handleOpenWallet === 'function') {
+        handleOpenWallet();
+      }
+    }}
+    initialPage={safeInitialPage} 
   />
 )}
 
@@ -451,7 +486,7 @@ export default function App() {
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-[72px] bg-white/90 backdrop-blur-xl border-t border-slate-200 flex items-center justify-around pb-safe z-40 px-2 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
           {navigationLinks.map((tab) => {
             const IconComponent = tab.icon;
-            const isActive = activeTab === tab.id;
+            const isActive = safeActiveTab === tab.id;
             return (
               <button
                 key={tab.id}
