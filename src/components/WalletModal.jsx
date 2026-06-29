@@ -210,14 +210,16 @@ export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpd
             </div>
           </div>
           
-          <button 
-            onClick={handleManualRefresh}
-            className={`w-12 h-12 bg-white border border-slate-200 text-slate-600 rounded-2xl flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm relative z-10 ${
-              isRefreshing ? 'animate-spin border-blue-500 text-blue-600' : ''
-            }`}
-          >
-            <RefreshCw className="w-5 h-5" />
-          </button>
+          {/* Only the arrow spins */}
+<button 
+  onClick={handleManualRefresh}
+  className={`w-12 h-12 bg-white border border-slate-200 text-slate-600 rounded-2xl flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm relative z-10 ${
+    isRefreshing ? 'border-blue-500 text-blue-600' : ''
+  }`}
+>
+  <RefreshCw className={`w-5 h-5 transition-transform ${isRefreshing ? 'animate-spin' : ''}`} />
+</button>
+
         </div>
 
         {/* --------------------------------------------------------------------

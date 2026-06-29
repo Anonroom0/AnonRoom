@@ -31,6 +31,7 @@ import RaffleView from './views/RaffleView.jsx';
 import MyTicketsView from './views/MyTicketView.jsx';
 import RedeemView from './views/ReedemView.jsx';
 import ProfileView from './views/ProfileView.jsx';
+import LandingView from './views/LandingView.jsx';
 import WalletModal from './components/WalletModal.jsx';
 
 export default function App() {
@@ -39,7 +40,8 @@ export default function App() {
   // ---------------------------------------------------------
   const [activeTab, setActiveTab] = useState('home');
   const [profileSubPage, setProfileSubPage] = useState('menu');
-  const [userProfile, setUserProfile] = useState({});
+  const [userProfile, setUserProfile] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
   // Modals & Trays
@@ -231,7 +233,7 @@ export default function App() {
     { id: 'profile', label: 'Profile', icon: User }
   ];
 
-  return (
+  return isAuthenticated ? (
     <div className="w-full h-full flex bg-slate-50 text-slate-900 font-sans overflow-hidden">
       
       {/* =========================================================
@@ -615,5 +617,13 @@ export default function App() {
       />
 
     </div>
+  ) : (
+    <LandingView
+      onAuthenticate={(userData) => {
+        setUserProfile(userData);
+        setIsAuthenticated(true);
+        setActiveTab('home');
+      }}
+    />
   );
 }
