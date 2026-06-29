@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+// Add this to your imports at the top:
+import BrandLogo from './components/BrandLogo.jsx';
+
 import { 
   Home, 
   Ticket, 
@@ -129,6 +132,22 @@ export default function App() {
     setSelectedRaffleId(raffleId);
     setActiveTab('raffle');
   };
+    // 👉 PASTE THIS MISSING CODE inside your App function:
+  const [profileSubPage, setProfileSubPage] = useState('menu');
+  const handleOpenWallet = () => {
+  // Add your logic to open the wallet modal or page here
+  console.log("Opening Wallet...");
+  // Example: setActiveTab('wallet');
+};
+
+  const handleProfileDeepLink = (targetPage) => {
+    setProfileSubPage(targetPage);
+    setActiveTab('profile'); // NOTE: If your app uses a different word to change tabs (like setCurrentTab), change this word to match!
+  };
+  const handleRaffleClick = () => {
+  // Add your logic to open the raffle page here
+  setActiveTab('raffles'); // Or whatever the tab name is for your raffle section
+};
 
   // ---------------------------------------------------------
   // NOTIFICATION HANDLERS
@@ -154,15 +173,17 @@ export default function App() {
   };
 
   // ---------------------------------------------------------
+    // ---------------------------------------------------------
   // RENDER: LOADING STATE
   // ---------------------------------------------------------
   if (isLoading) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-6 animate-pop-in">
-          <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center shadow-xl shadow-blue-600/30">
-            <span className="text-3xl font-black text-white tracking-tighter">A</span>
-          </div>
+          
+          {/* Beautiful SVG Logo on Splash Screen */}
+          <BrandLogo className="w-16 h-16 shadow-xl shadow-blue-600/30 rounded-3xl" />
+          
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
             <div className="w-2.5 h-2.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -193,9 +214,10 @@ export default function App() {
         {/* Logo & Brand */}
         <div className="h-20 flex items-center px-8 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center shadow-md shadow-blue-600/20">
-              <span className="text-lg font-black text-white">A</span>
-            </div>
+            
+            {/* Beautiful SVG Logo on Sidebar */}
+            <BrandLogo className="w-10 h-10 shadow-md shadow-blue-600/20 rounded-2xl" />
+            
             <span className="text-xl font-bold tracking-tight text-slate-900">AnonRoom</span>
           </div>
         </div>
@@ -223,6 +245,8 @@ export default function App() {
               );
             })}
           </nav>
+
+              
 
           {/* Secondary Links */}
           <nav className="space-y-1.5">
@@ -260,20 +284,24 @@ export default function App() {
             ----------------------------------------------------- */}
         <header className="h-16 lg:h-20 bg-white/80 backdrop-blur-xl border-b border-slate-200 px-4 lg:px-8 flex items-center justify-between z-30 shrink-0 shadow-sm relative">
           
-          {/* Mobile Left Side: Menu + Logo */}
-          <div className="flex items-center gap-3 lg:hidden">
-            <button 
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center shadow-sm">
-                <span className="text-sm font-black text-white">A</span>
-              </div>
-            </div>
-          </div>
+              {/* Mobile Left Side: Menu + Logo */}
+      <div className="flex items-center gap-3 lg:hidden">
+        <button 
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors shrink-0"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+        
+        <div className="flex items-center gap-2">
+          {/* Added shrink-0 and drop-shadow here instead of inside the SVG */}
+          <BrandLogo className="w-8 h-8 rounded-xl shrink-0 drop-shadow-md" />
+          <span className="text-lg font-bold tracking-tight text-slate-900 truncate">AnonRoom</span>
+        </div>
+      </div>
+
+
+
 
           {/* Desktop Left Side: Page Title / Breadcrumbs */}
           <div className="hidden lg:flex items-center gap-2 text-sm font-semibold">
@@ -383,26 +411,37 @@ export default function App() {
         <main className="flex-1 overflow-y-auto custom-scrollbar relative bg-slate-50">
           <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 pb-32 lg:pb-12 animate-fade-in min-h-full">
             {activeTab === 'home' && (
-              <HomeView 
-                onTabChange={navigateTo} 
-                onSelectRaffle={navigateToSpecificRaffle} 
-              />
-            )}
+  <HomeView 
+    userProfile={userProfile}
+    onDeepLink={handleProfileDeepLink}
+    onTabChange={setActiveTab}
+    onSelectRaffle={handleRaffleClick} // This is what the app was looking for!
+  />
+)}
+
+
             {activeTab === 'raffle' && (
               <RaffleView 
                 targetRaffleId={selectedRaffleId} 
                 clearTarget={() => setSelectedRaffleId(null)} 
               />
             )}
-            {activeTab === 'tickets' && (
-              <MyTicketsView />
-            )}
-            {activeTab === 'profile' && (
-              <ProfileView 
-                userProfile={userProfile} 
-                onOpenWallet={() => setIsWalletOpen(true)} 
-              />
-            )}
+           {activeTab === 'tickets' && (
+  <MyTicketsView 
+    onTabChange={navigateTo} 
+    onSelectRaffle={navigateToSpecificRaffle} 
+  />
+)}
+
+           {activeTab === 'profile' && (
+  <ProfileView 
+    userProfile={userProfile} 
+    onOpenWallet={handleOpenWallet} // <--- This must be here
+    initialPage={profileSubPage} 
+  />
+)}
+
+            
           </div>
         </main>
 

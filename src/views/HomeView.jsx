@@ -14,9 +14,9 @@ import {
 } from 'lucide-react';
 import { MockAPI } from '../services/MockApi.js';
 import { AudioEngine } from '../services/AudioEngine.js';
+export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, userProfile }) {
 
-export default function HomeView({ onTabChange, onSelectRaffle }) {
-  // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
   // STATE MANAGEMENT
   // ---------------------------------------------------------------------------
   const [ticketCount, setTicketCount] = useState(0);
@@ -360,6 +360,54 @@ export default function HomeView({ onTabChange, onSelectRaffle }) {
           })}
         </div>
       </div>
+      {/* ====================================================================
+    GOLDEN REFERRAL BANNER (HOME SCREEN)
+    ==================================================================== */}
+<div 
+  onClick={() => {
+    if (window.AudioEngine) window.AudioEngine.playClick();
+    
+    // THIS IS THE FIX: Use the deep link function
+    if (onDeepLink) {
+        onDeepLink('referrals');
+    } else {
+        // Fallback in case onDeepLink is missing
+        console.error("onDeepLink prop is missing!");
+    }
+  }}
+  className="w-full relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 cursor-pointer group shadow-lg shadow-amber-500/20 active:scale-[0.98] transition-all duration-300 mt-6 border border-yellow-300" 
+>
+
+  {/* Premium Texture Overlay */}
+  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 mix-blend-overlay"></div>
+  
+  {/* Subtle Shimmer Effect on Hover */}
+  <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-20deg]"></div>
+  
+  <div className="p-4 sm:p-5 flex items-center justify-between relative z-10">
+    <div className="flex items-center gap-4">
+      {/* Icon Block */}
+      <div className="w-12 h-12 bg-amber-900/10 rounded-full flex items-center justify-center backdrop-blur-sm border border-amber-900/10 shrink-0">
+        <Users className="w-6 h-6 text-amber-950" />
+      </div>
+      
+      {/* Text Info */}
+      <div>
+        <h3 className="text-lg font-black text-amber-950 leading-tight">
+          Refer & Earn 10%
+        </h3>
+        <p className="text-xs sm:text-sm font-bold text-amber-900/80 mt-0.5">
+          Get a 10% commission on your friends' deposits.
+        </p>
+      </div>
+    </div>
+    
+    {/* Action Arrow */}
+    <div className="w-10 h-10 bg-amber-950 text-yellow-400 rounded-full flex items-center justify-center shrink-0 shadow-md group-hover:scale-110 transition-transform duration-300">
+      <ArrowRight className="w-5 h-5" />
+    </div>
+  </div>
+</div>
 
       {/* 4. "WAYS TO EARN" QUICK LINKS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

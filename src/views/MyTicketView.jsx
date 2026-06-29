@@ -4,313 +4,351 @@ import {
   ChevronDown, 
   ChevronUp, 
   ArrowUpRight, 
-  Percent, 
   Search,
   Clock,
   CheckCircle2,
-  AlertCircle,
   Calendar,
   LayoutGrid,
   TrendingUp,
   Hash,
-  ShoppingBag
+  ShoppingBag,
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { MockAPI } from '../services/MockApi.js';
 import { AudioEngine } from '../services/AudioEngine.js';
 
-export default function MyTicketsView({ onTabChange }) {
+export default function MyTicketsView({ onTabChange, onSelectRaffle }) {
   // ---------------------------------------------------------------------------
-  // STATE MANAGEMENT
+  // 1. STATE MANAGEMENT
   // ---------------------------------------------------------------------------
+  
   const [tickets, setTickets] = useState([]);
   const [raffles, setRaffles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // UI Interaction States
-  const [expandedEpid, setExpandedEpid] = useState(null); 
-  const [activeTab, setActiveTab] = useState('active'); // 'active' | 'past'
+  const [expandedTicketId, setExpandedTicketId] = useState(null); 
+  const [activeTab, setActiveTab] = useState('active'); 
   const [searchQuery, setSearchQuery] = useState('');
 
   // ---------------------------------------------------------------------------
-  // INITIALIZATION & DATA FETCHING
+  // 2. INITIALIZATION & DATA FETCHING
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchTicketData() {
       try {
+        setIsLoading(true);
         const [ticketData, raffleData] = await Promise.all([
           MockAPI.getUserTickets(),
           MockAPI.getRaffles()
         ]);
         
-        // Simulating network delay for smooth UI transition
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        setTickets(ticketData);
-        setRaffles(raffleData);
+        if (isMounted) {
+          setTickets(ticketData);
+          setRaffles(raffleData);
+        }
       } catch (err) {
-        console.error("Failed to load tickets:", err);
+        console.error("Critical Failure: Unable to load ticket datasets:", err);
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
+
     fetchTicketData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // ---------------------------------------------------------------------------
-  // INTERACTION HANDLERS
+  // 3. BUG-PROOF EVENT HANDLERS
   // ---------------------------------------------------------------------------
-  const handleRowExpansionToggle = (epid) => {
+  
+  const handleRowExpansionToggle = (e, rawTicketId) => {
+    e.preventDefault();
+    e.stopPropagation();
     AudioEngine.playClick();
-    // Enforce isolated tracking rule - close if open, or open the new target independently
-    setExpandedEpid(expandedEpid === epid ? null : epid);
+    setExpandedTicketId(prevId => prevId === rawTicketId ? null : rawTicketId);
   };
 
   const handleTabSwitch = (tab) => {
     AudioEngine.playClick();
     setActiveTab(tab);
-    setExpandedEpid(null); // Close any expanded tickets when switching tabs
+    setExpandedTicketId(null); 
+  };
+
+  const handleDeepLinkToRaffle = (e, raffleId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    AudioEngine.playClick();
+    
+    // Aggressively attempt deep-link first
+    if (onSelectRaffle && typeof onSelectRaffle === 'function') {
+      onSelectRaffle(raffleId);
+    } else if (onTabChange && typeof onTabChange === 'function') {
+      onTabChange('raffle');
+    } else {
+      console.warn("Navigation props missing in MyTicketsView!");
+    }
+  };
+
+  const handleClearSearch = () => {
+    AudioEngine.playClick();
+    setSearchQuery('');
   };
 
   // ---------------------------------------------------------------------------
-  // DATA PROCESSING & FILTERING
+  // 4. DATA PROCESSING & FILTERING PIPELINE
   // ---------------------------------------------------------------------------
   
-  // In a real app, 'past' draws would be determined by a date or status flag.
-  // For this rich UI demonstration, we will split them artificially if needed, 
-  // or just show empty state for 'past' to demonstrate the UI thoroughly.
-  
-  const processTickets = () => {
+  const processTicketsPipeline = () => {
     return tickets.map(batch => {
       const associatedPool = raffles.find((r) => r.id === batch.raffle_id);
+      const horizontalEPID = `EPID-2026-${String(batch.id).substring(0, 4).toUpperCase()}`;
       
-      // Clean, standard Event Participation ID (EPID) 
-      const horizontalEPID = `EPID-2026-${batch.id.substring(0, 4).toUpperCase()}`;
-      
-      // Calculate Win Probability (Safe math)
       let winProbabilityRatio = '0.00';
       if (associatedPool && associatedPool.tickets_sold > 0) {
-        winProbabilityRatio = ((batch.quantity_bought / associatedPool.tickets_sold) * 100).toFixed(2);
+        const ratio = (batch.quantity_bought / associatedPool.tickets_sold) * 100;
+        winProbabilityRatio = ratio.toFixed(2);
       }
 
-      // Determine mock status based on active tab concept
-      // We assume all fetched from MockAPI are 'active'. Past ones are mocked.
-      const status = activeTab === 'active' ? 'Drawing Soon' : 'Draw Completed';
+      const statusLabel = activeTab === 'active' ? 'Drawing Soon' : 'Draw Completed';
 
       return {
         ...batch,
         associatedPool,
         horizontalEPID,
         winProbabilityRatio,
-        status,
+        statusLabel,
         isPast: activeTab === 'past'
       };
     }).filter(ticket => {
-      // Apply Search Filter
       if (searchQuery) {
-        const titleMatch = ticket.associatedPool?.title?.toLowerCase().includes(searchQuery.toLowerCase());
-        const epidMatch = ticket.horizontalEPID.toLowerCase().includes(searchQuery.toLowerCase());
+        const query = searchQuery.toLowerCase().trim();
+        const titleMatch = ticket.associatedPool?.title?.toLowerCase().includes(query);
+        const epidMatch = ticket.horizontalEPID.toLowerCase().includes(query);
         return titleMatch || epidMatch;
       }
       return true;
     });
   };
 
-  const displayedTickets = processTickets();
+  const displayedTickets = processTicketsPipeline();
   const totalActiveTickets = tickets.reduce((acc, curr) => acc + curr.quantity_bought, 0);
   const uniqueDrawsEntered = new Set(tickets.map(t => t.raffle_id)).size;
 
   // ---------------------------------------------------------------------------
-  // RENDER: LOADING STATE
+  // 5. RENDER: LOADING SKELETON
   // ---------------------------------------------------------------------------
   if (isLoading) {
     return (
       <div className="w-full h-full p-4 sm:p-6 space-y-6 max-w-4xl mx-auto animate-pulse">
-        <div className="h-24 w-full bg-slate-200 rounded-2xl"></div>
-        <div className="flex gap-4 mb-6">
-          <div className="h-10 w-32 bg-slate-200 rounded-xl"></div>
-          <div className="h-10 w-32 bg-slate-200 rounded-xl"></div>
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="h-24 bg-slate-200 rounded-[1.25rem]"></div>
+          <div className="h-24 bg-slate-200 rounded-[1.25rem]"></div>
         </div>
-        {[1, 2, 3].map(i => (
-          <div key={i} className="h-32 bg-slate-200 rounded-[1.25rem]"></div>
-        ))}
+        
+        <div className="flex gap-4 mb-6">
+          <div className="h-12 flex-1 bg-slate-200 rounded-xl"></div>
+          <div className="h-12 flex-1 bg-slate-200 rounded-xl hidden sm:block"></div>
+        </div>
+        
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-32 bg-slate-200 rounded-[1.25rem]"></div>
+          ))}
+        </div>
       </div>
     );
   }
 
   // ---------------------------------------------------------------------------
-  // RENDER: MAIN TICKET HUB
+  // 6. RENDER: MAIN DASHBOARD VIEW
   // ---------------------------------------------------------------------------
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6 pb-16 animate-fade-in">
+    <div className="w-full max-w-4xl mx-auto space-y-6 pb-20 animate-fade-in">
       
-      {/* 1. PAGE HEADER & STATS SUMMARY */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">My Tickets</h2>
-          <p className="text-sm font-medium text-slate-500 mt-1">Manage your entries and view draw details.</p>
+          <p className="text-sm font-medium text-slate-500 mt-1">
+            Manage your active entries and review past draw results securely.
+          </p>
         </div>
       </div>
 
-      {/* Analytics Cards */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="card-standard p-5 bg-white border border-slate-100 flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shrink-0">
-            <Ticket className="w-6 h-6" />
+        <div className="card-standard p-5 sm:p-6 bg-white border border-slate-100 flex items-center gap-4 sm:gap-5 transition-shadow hover:shadow-md">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shrink-0">
+            <Ticket className="w-6 h-6 sm:w-7 sm:h-7" />
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-500">Total Entries</p>
-            <p className="text-2xl font-black text-slate-900">{totalActiveTickets}</p>
+            <p className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider">Total Entries</p>
+            <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-0.5">{totalActiveTickets}</p>
           </div>
         </div>
-        <div className="card-standard p-5 bg-white border border-slate-100 flex items-center gap-4">
-          <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0">
-            <LayoutGrid className="w-6 h-6" />
+        
+        <div className="card-standard p-5 sm:p-6 bg-white border border-slate-100 flex items-center gap-4 sm:gap-5 transition-shadow hover:shadow-md">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0">
+            <LayoutGrid className="w-6 h-6 sm:w-7 sm:h-7" />
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-500">Active Draws</p>
-            <p className="text-2xl font-black text-slate-900">{uniqueDrawsEntered}</p>
+            <p className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider">Active Draws</p>
+            <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-0.5">{uniqueDrawsEntered}</p>
           </div>
         </div>
       </div>
 
-      {/* 2. FILTER & SEARCH CONTROLS */}
-      <div className="bg-white p-2 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="bg-white p-2.5 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
         
-        {/* Tab Switcher */}
-        <div className="flex items-center w-full sm:w-auto bg-slate-50 p-1 rounded-xl border border-slate-100">
+        <div className="flex items-center w-full sm:w-auto bg-slate-50 p-1.5 rounded-xl border border-slate-100">
           <button
             onClick={() => handleTabSwitch('active')}
-            className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
+            className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
               activeTab === 'active' 
-                ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' 
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white text-blue-600 shadow-sm border border-slate-200/60 scale-[1.02]' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
             }`}
           >
             Active Draws
           </button>
           <button
             onClick={() => handleTabSwitch('past')}
-            className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
+            className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
               activeTab === 'past' 
-                ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' 
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white text-blue-600 shadow-sm border border-slate-200/60 scale-[1.02]' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
             }`}
           >
             Past Draws
           </button>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-80">
           <input 
             type="text"
-            placeholder="Search by ID or Title..."
+            placeholder="Search by Ticket ID or Prize Name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl px-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+            className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl pl-11 pr-10 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium shadow-inner"
           />
-          <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-4 top-3.5 w-4 h-4 text-slate-400" />
+          
+          {searchQuery && (
+            <button 
+              onClick={handleClearSearch}
+              className="absolute right-3 top-3.5 p-0.5 bg-slate-200 text-slate-500 rounded-full hover:bg-slate-300 transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 3. TICKET LISTING (STANDARD APP UI) */}
       {displayedTickets.length === 0 ? (
-        <div className="card-standard p-12 flex flex-col items-center justify-center text-center space-y-4 bg-white mt-4">
-          <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
-            <Ticket className="w-10 h-10 text-slate-300" />
+        
+        <div className="card-standard p-12 sm:p-16 flex flex-col items-center justify-center text-center space-y-5 bg-white mt-4 shadow-sm border border-slate-100">
+          <div className="w-24 h-24 bg-slate-50 rounded-[2rem] flex items-center justify-center shadow-inner">
+            <Ticket className="w-10 h-10 text-slate-300" strokeWidth={1.5} />
           </div>
-          <div>
-            <h3 className="text-xl font-bold text-slate-900">No Tickets Found</h3>
-            <p className="text-sm text-slate-500 font-medium max-w-sm mt-1 mx-auto">
+          <div className="space-y-2">
+            <h3 className="text-xl sm:text-2xl font-bold text-slate-900">No Tickets Found</h3>
+            <p className="text-sm sm:text-base text-slate-500 font-medium max-w-md mx-auto leading-relaxed">
               {searchQuery 
-                ? `We couldn't find any tickets matching "${searchQuery}".` 
-                : `You don't have any ${activeTab} tickets right now. Head over to the Raffles page to join a draw!`}
+                ? `We couldn't find any tickets matching your search query "${searchQuery}". Please try adjusting your filters.` 
+                : `You don't have any ${activeTab} tickets right now. Head over to the Raffles page to join a draw and test your luck!`}
             </p>
           </div>
+          
           {!searchQuery && activeTab === 'active' && (
             <button 
               onClick={() => { AudioEngine.playClick(); onTabChange('raffle'); }}
-              className="btn-primary mt-4"
+              className="btn-primary mt-6 px-8 py-3.5 shadow-blue-500/25"
             >
               Browse Live Raffles
             </button>
           )}
         </div>
+
       ) : (
-        <div className="space-y-4">
+        
+        <div className="space-y-5">
           {displayedTickets.map((ticketData) => {
-            const isRowOpen = expandedEpid === ticketData.horizontalEPID;
+            const isRowOpen = expandedTicketId === ticketData.id;
             const pool = ticketData.associatedPool;
 
             return (
-              <div key={ticketData.id} className="card-standard flex flex-col bg-white overflow-visible">
+              <div 
+                key={ticketData.id} 
+                className="card-standard flex flex-col bg-white overflow-visible transition-all shadow-sm hover:shadow-md border border-slate-100"
+              >
                 
-                {/* 🎟️ MODERN TICKET CARD DESIGN (HORIZONTAL) */}
                 <div 
-                  onClick={() => handleRowExpansionToggle(ticketData.horizontalEPID)}
-                  className="flex h-[110px] sm:h-[130px] cursor-pointer group relative"
+                  onClick={(e) => handleRowExpansionToggle(e, ticketData.id)}
+                  className="flex h-[110px] sm:h-[130px] cursor-pointer group relative bg-white hover:bg-slate-50/50 transition-colors"
                 >
                   
-                  {/* Left Section: Details */}
-                  <div className="flex-1 p-4 sm:p-5 flex flex-col justify-between min-w-0 bg-white rounded-l-[1.25rem]">
-                    <div className="space-y-1.5 min-w-0">
+                  <div className="flex-1 p-4 sm:p-5 flex flex-col justify-between min-w-0 rounded-l-[1.25rem]">
+                    <div className="space-y-2 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm">
                           {ticketData.horizontalEPID}
                         </span>
-                        <span className={`hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
-                          activeTab === 'active' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-slate-100 text-slate-500'
+                        <span className={`hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm ${
+                          activeTab === 'active' 
+                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                            : 'bg-slate-100 text-slate-500 border border-slate-200'
                         }`}>
-                          {ticketData.status}
+                          {ticketData.statusLabel}
                         </span>
                       </div>
-                      <h4 className="text-sm sm:text-base font-bold text-slate-900 truncate pr-2 group-hover:text-blue-600 transition-colors">
-                        {pool?.title || 'System Reward Raffle'}
+                      <h4 className="text-sm sm:text-lg font-bold text-slate-900 truncate pr-2 group-hover:text-blue-600 transition-colors">
+                        {pool?.title || 'System Reward Raffle Allocation'}
                       </h4>
                     </div>
 
                     <div className="flex items-center justify-between text-xs font-medium text-slate-500 pr-2">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-4 h-4 text-slate-400" />
-                        <span>Draw Date: TBA</span>
+                        <span>Draw Target: Processing</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Middle Section: Soft Perforated Divider */}
                   <div className="relative w-0 border-l-2 border-dashed border-slate-200 my-4 flex flex-col items-center justify-center shrink-0 z-10">
-                    {/* Semi-circle cutouts top and bottom for realistic modern ticket look */}
-                    <div className="absolute -top-4 w-4 h-4 bg-slate-50 rounded-full border border-slate-100 shadow-inner -translate-x-[1px]" />
-                    <div className="absolute -bottom-4 w-4 h-4 bg-slate-50 rounded-full border border-slate-100 shadow-inner -translate-x-[1px]" />
-                    
-                    {/* Floating Expansion Indicator */}
-                    <div className="absolute bg-white border border-slate-200 rounded-full p-1 shadow-sm text-slate-400 group-hover:text-blue-500 transition-colors -translate-x-[1px]">
+                    <div className="absolute -top-4 w-5 h-5 bg-slate-50 rounded-full border border-slate-100 shadow-inner -translate-x-[1.5px]" />
+                    <div className="absolute -bottom-4 w-5 h-5 bg-slate-50 rounded-full border border-slate-100 shadow-inner -translate-x-[1.5px]" />
+                    <div className="absolute bg-white border border-slate-200 rounded-full p-1.5 shadow-sm text-slate-400 group-hover:text-blue-500 group-hover:border-blue-200 transition-colors -translate-x-[1px]">
                       {isRowOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </div>
                   </div>
 
-                  {/* Right Section: Prize Image & Counter */}
-                  <div className="w-[100px] sm:w-[140px] relative shrink-0 rounded-r-[1.25rem] overflow-hidden bg-slate-100 p-2 sm:p-3 flex flex-col items-center justify-center border-l border-transparent">
-                    {/* Image Backdrop Layer */}
+                  <div className="w-[100px] sm:w-[150px] relative shrink-0 rounded-r-[1.25rem] overflow-hidden bg-slate-100 p-2 sm:p-3 flex flex-col items-center justify-center border-l border-transparent">
                     <div className="absolute inset-0">
                       {pool?.image ? (
                         <img 
                           src={pool.image} 
-                          alt="Prize" 
-                          className="w-full h-full object-cover opacity-30 group-hover:scale-110 transition-transform duration-500"
+                          alt="Prize Preview" 
+                          className="w-full h-full object-cover opacity-25 group-hover:opacity-40 group-hover:scale-110 transition-all duration-700 ease-out"
                         />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300" />
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white/90" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-white/40 to-transparent" />
                     </div>
 
-                    {/* Quantity Display Front */}
-                    <div className="relative z-10 flex flex-col items-center justify-center">
-                      <span className="text-3xl sm:text-4xl font-black text-slate-900 leading-none drop-shadow-sm">
+                    <div className="relative z-10 flex flex-col items-center justify-center pt-2">
+                      <span className="text-4xl sm:text-5xl font-black text-slate-900 leading-none drop-shadow-sm tracking-tighter">
                         {ticketData.quantity_bought}
                       </span>
-                      <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-1 bg-white/80 px-2 py-0.5 rounded-md backdrop-blur-sm shadow-sm">
+                      <span className="text-[10px] font-bold text-slate-700 uppercase tracking-widest mt-1.5 bg-white/90 px-2.5 py-0.5 rounded-lg backdrop-blur-md shadow-sm border border-white/50">
                         Entries
                       </span>
                     </div>
@@ -318,64 +356,65 @@ export default function MyTicketsView({ onTabChange }) {
 
                 </div>
 
-                {/* 📂 EXPANDED TICKET DETAILS SUB-PANEL */}
+                {/* ==============================================================
+                    EXPANDED DROPDOWN: TICKET DETAILS SUB-PANEL
+                    ============================================================== */}
                 {isRowOpen && (
-                  <div className="border-t border-slate-100 bg-slate-50/50 p-5 sm:p-6 animate-slide-up origin-top">
+                  <div className="border-t border-slate-100 bg-slate-50/60 p-5 sm:p-6 animate-fade-in origin-top">
                     
                     <h5 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-                      <Info className="w-4 h-4 text-blue-500" /> Entry Details Breakdown
+                      <ShoppingBag className="w-4 h-4 text-blue-500" /> 
+                      Detailed Entry Verification
                     </h5>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                       
-                      {/* Detail Card 1: ID */}
-                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                          <Hash className="w-3 h-3" /> Participation ID
+                      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1.5 transition-shadow hover:shadow-md">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <Hash className="w-3.5 h-3.5" /> Participation ID
                         </span>
-                        <span className="text-sm font-bold text-slate-900 block select-all">
+                        <span className="text-sm font-bold text-slate-900 block select-all font-mono">
                           {ticketData.horizontalEPID}
                         </span>
                       </div>
 
-                      {/* Detail Card 2: Probability */}
-                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                          <TrendingUp className="w-3 h-3" /> Win Probability
+                      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1.5 transition-shadow hover:shadow-md">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <TrendingUp className="w-3.5 h-3.5" /> Win Probability
                         </span>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-lg font-black text-emerald-600 leading-none">
+                          <span className="text-xl font-black text-emerald-600 leading-none">
                             {ticketData.winProbabilityRatio}%
                           </span>
-                          <span className="text-xs font-medium text-slate-500 leading-none mt-1">Chance</span>
+                          <span className="text-xs font-bold text-slate-500 leading-none mt-1">Chance</span>
                         </div>
                       </div>
 
-                      {/* Detail Card 3: Value */}
-                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                          <ShoppingBag className="w-3 h-3" /> Total Value
+                      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1.5 transition-shadow hover:shadow-md">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <ShoppingBag className="w-3.5 h-3.5" /> Total Value Spent
                         </span>
-                        <span className="text-sm font-bold text-slate-900 block">
+                        <span className="text-sm font-bold text-slate-900 block font-mono">
                           {(ticketData.quantity_bought * 1.00).toFixed(2)} AR
                         </span>
                       </div>
 
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200/60">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                        <span>Your entries are verified and secured in the system.</span>
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-5 border-t border-slate-200/80">
+                      
+                      <div className="flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-600 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <span>Entries successfully cryptographically recorded.</span>
                       </div>
 
-                      {/* Navigation Trigger to original Raffle Pool */}
                       <button
-                        onClick={() => { AudioEngine.playClick(); onTabChange('raffle'); }} // In reality, we'd pass the ID to open the specific raffle
-                        className="w-full sm:w-auto btn-secondary py-2 border-slate-200"
+                        onClick={(e) => handleDeepLinkToRaffle(e, ticketData.raffle_id)}
+                        className="w-full sm:w-auto btn-secondary py-2.5 px-6 border-slate-200 bg-white shadow-sm hover:border-slate-300 hover:shadow-md active:scale-95 transition-all text-sm"
                       >
-                        View Draw Page <ArrowUpRight className="w-4 h-4" />
+                        View Raffle <ArrowUpRight className="w-4 h-4" />
                       </button>
+                      
                     </div>
 
                   </div>
