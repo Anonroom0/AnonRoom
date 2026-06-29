@@ -430,22 +430,9 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
           <ChevronRight className="w-5 h-5 text-blue-400" />
         </div>
 
-        <div 
-          onClick={() => { AudioEngine.playClick(); onTabChange('profile'); }}
-          className="card-hoverable p-5 flex items-center justify-between bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-100/50"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-emerald-600">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900 text-sm">Refer Friends</h3>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">Get 50 AR per invite</p>
-            </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-emerald-400" />
-        </div>
+        
       </div>
+     
 
       {/* 5. RECENT COMMUNITY ACTIVITY FEED */}
       <div className="card-standard bg-white">
