@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { SupabaseService } from '../services/SupabaseService';
 
-function AuthModal({ authMode, setAuthMode, onSubmit, isLoading, errorMsg }) {
+function AuthModal({ authMode, setAuthMode, onSubmit, isLoading, errorMsg, showOtp, setShowOtp, otpCode, setOtpCode, handleVerifyOtp }) {
   const [formValues, setFormValues] = useState({ name: '', email: '', password: '' });
   const isLogin = authMode === 'signIn';
 
@@ -28,75 +28,121 @@ function AuthModal({ authMode, setAuthMode, onSubmit, isLoading, errorMsg }) {
           </div>
 
           <h2 className="text-2xl font-black text-slate-900 mb-2">
-            {isLogin ? 'Welcome Back' : 'Create an Account'}
+            {showOtp ? 'Verify Your Email' : isLogin ? 'Welcome Back' : 'Create an Account'}
           </h2>
           <p className="text-slate-500 font-medium mb-8">
-            {isLogin ? 'Enter your details to access your wallet.' : 'Start earning AR coins and winning raffles today.'}
+            {showOtp
+              ? 'Check your email for the 6-digit code.'
+              : isLogin
+                ? 'Enter your details to access your wallet.'
+                : 'Start earning AR coins and winning raffles today.'}
           </p>
 
-          <form onSubmit={(e) => onSubmit(e, formValues)} className="space-y-4">
-            {!isLogin && (
+          {showOtp ? (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div className="relative">
-                <User className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Full Name"
+                  placeholder="Enter 6-digit code"
                   required
-                  value={formValues.name}
-                  onChange={handleChange('name')}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
                 />
               </div>
-            )}
 
-            <div className="relative">
-              <Mail className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
-              <input
-                type="email"
-                placeholder="Email Address"
-                required
-                value={formValues.email}
-                onChange={handleChange('email')}
-                className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
-              />
-            </div>
+              {errorMsg && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
+                  {errorMsg}
+                </div>
+              )}
 
-            <div className="relative">
-              <Lock className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
-              <input
-                type="password"
-                placeholder="Password"
-                required
-                value={formValues.password}
-                onChange={handleChange('password')}
-                className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
-              />
-            </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95 mt-4 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isLoading ? 'Processing...' : 'Verify Code'}
+              </button>
 
-            {errorMsg && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
-                {errorMsg}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOtp(false);
+                  setOtpCode('');
+                }}
+                className="w-full py-4 bg-slate-100 text-slate-700 rounded-xl font-bold border border-slate-200 hover:bg-slate-200 transition-all active:scale-95"
+              >
+                Back
+              </button>
+            </form>
+          ) : (
+            <>
+              <form onSubmit={(e) => onSubmit(e, formValues)} className="space-y-4">
+                {!isLogin && (
+                  <div className="relative">
+                    <User className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Full Name"
+                      required
+                      value={formValues.name}
+                      onChange={handleChange('name')}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                    />
+                  </div>
+                )}
+
+                <div className="relative">
+                  <Mail className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    required
+                    value={formValues.email}
+                    onChange={handleChange('email')}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                  />
+                </div>
+
+                <div className="relative">
+                  <Lock className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    required
+                    value={formValues.password}
+                    onChange={handleChange('password')}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                  />
+                </div>
+
+                {errorMsg && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
+                    {errorMsg}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95 mt-4 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isLoading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}
+                </button>
+              </form>
+
+              <div className="mt-6 text-center">
+                <button
+                  type="button"
+                  onClick={() => setAuthMode(isLogin ? 'signUp' : 'signIn')}
+                  className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                >
+                  {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+                </button>
               </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95 mt-4 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isLoading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}
-            </button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => setAuthMode(isLogin ? 'signUp' : 'signIn')}
-              className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
-            >
-              {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
-            </button>
-          </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -106,7 +152,10 @@ function AuthModal({ authMode, setAuthMode, onSubmit, isLoading, errorMsg }) {
 export default function LandingView({ onAuthenticate }) {
   // 'idle' | 'signIn' | 'signUp'
   const [authMode, setAuthMode] = useState('idle');
-  
+  const [showOtp, setShowOtp] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [pendingEmail, setPendingEmail] = useState('');
+
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -133,11 +182,41 @@ export default function LandingView({ onAuthenticate }) {
       if (isLogin) {
         await SupabaseService.signIn(formValues.email, formValues.password);
       } else {
-        await SupabaseService.signUp(formValues.email, formValues.password, formValues.name);
+        const authData = await SupabaseService.signUp(formValues.email, formValues.password, formValues.name);
+
+        if (!authData.session) {
+          setPendingEmail(formValues.email);
+          setShowOtp(true);
+          setErrorMsg('');
+          setIsLoading(false);
+          return;
+        }
       }
 
       const session = await SupabaseService.getSession();
       const profile = await SupabaseService.getUserProfile(session.user.id);
+      onAuthenticate(profile);
+    } catch (error) {
+      setErrorMsg(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMsg('');
+
+    try {
+      const authData = await SupabaseService.verifyEmailOtp(pendingEmail, otpCode);
+      const userId = authData.session?.user?.id;
+
+      if (!userId) {
+        throw new Error('Unable to verify OTP or retrieve user session.');
+      }
+
+      const profile = await SupabaseService.getUserProfile(userId);
       onAuthenticate(profile);
     } catch (error) {
       setErrorMsg(error.message);
@@ -255,6 +334,11 @@ export default function LandingView({ onAuthenticate }) {
       onSubmit={handleSubmit}
       isLoading={isLoading}
       errorMsg={errorMsg}
+      showOtp={showOtp}
+      setShowOtp={setShowOtp}
+      otpCode={otpCode}
+      setOtpCode={setOtpCode}
+      handleVerifyOtp={handleVerifyOtp}
     />
   );
 

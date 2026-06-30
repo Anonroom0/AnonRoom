@@ -19,6 +19,15 @@ export const SupabaseService = {
     if (error) throw error;
     return data;
   },
+    async verifyEmailOtp(email, token) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'signup'
+    });
+    if (error) throw error;
+    return data;
+  },
 
   async signOut() {
     await supabase.auth.signOut();
