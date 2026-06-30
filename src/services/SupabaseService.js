@@ -58,6 +58,32 @@ export const SupabaseService = {
   onAuthStateChange(callback) {
     return supabase.auth.onAuthStateChange(callback);
   },
+  // 1. Send the OTP to the user's email
+  async sendPasswordResetOtp(email) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) throw error;
+    return true;
+  },
+
+  // 2. Verify the 6-digit code (Notice the type is 'recovery', not 'signup')
+  async verifyPasswordResetOtp(email, token) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'recovery'
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  // 3. Save the new password
+  async updatePassword(newPassword) {
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+    if (error) throw error;
+    return data;
+  },
 
   // ==========================================
   // DATABASE QUERIES

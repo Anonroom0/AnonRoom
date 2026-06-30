@@ -12,6 +12,7 @@ export default function LandingView({ onAuthenticate }) {
   const otpRefs = useRef([]);
   const [pendingEmail, setPendingEmail] = useState('');
   const [formValues, setFormValues] = useState({ name: '', email: '', password: '' });
+  const [newPassword, setNewPassword] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -87,6 +88,7 @@ export default function LandingView({ onAuthenticate }) {
     setErrorMsg('');
     setSuccessMsg('');
     setResendTimer(0);
+    setNewPassword('');
   };
 
   const handleSubmit = async (e, formValuesToSubmit) => {
@@ -120,6 +122,59 @@ export default function LandingView({ onAuthenticate }) {
       onAuthenticate(profile);
     } catch (error) {
       setErrorMsg(error?.message || String(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendResetOtp = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    try {
+      const email = formValues.email;
+      setPendingEmail(email);
+      await SupabaseService.sendPasswordResetOtp(email);
+      setAuthMode('resetOtp');
+    } catch (error) {
+      setErrorMsg(safeErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyResetOtp = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMsg('');
+
+    try {
+      const code = otpValues.join('');
+      setOtpCode(code);
+      await SupabaseService.verifyPasswordResetOtp(pendingEmail, code);
+      setAuthMode('newPassword');
+      setSuccessMsg('');
+    } catch (error) {
+      setErrorMsg(safeErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMsg('');
+
+    try {
+      await SupabaseService.updatePassword(newPassword);
+      setAuthMode('signIn');
+      setSuccessMsg('Password updated successfully! Please sign in.');
+      setNewPassword('');
+    } catch (error) {
+      setErrorMsg(safeErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -278,14 +333,30 @@ export default function LandingView({ onAuthenticate }) {
               </div>
 
               <h2 className="text-2xl font-black text-slate-900 mb-2">
-                {showOtp ? 'Verify Your Email' : isLogin ? 'Welcome Back' : 'Create an Account'}
+                {showOtp
+                  ? 'Verify Your Email'
+                  : authMode === 'forgotPassword'
+                    ? 'Reset Your Password'
+                    : authMode === 'resetOtp'
+                      ? 'Enter Recovery Code'
+                      : authMode === 'newPassword'
+                        ? 'Set New Password'
+                        : isLogin
+                          ? 'Welcome Back'
+                          : 'Create an Account'}
               </h2>
               <p className="text-slate-500 font-medium mb-8">
                 {showOtp
                   ? `We have sent a 6-digit verification code to ${pendingEmail}. Please enter it below.`
-                  : isLogin
-                    ? 'Enter your details to access your wallet.'
-                    : 'Start earning AR coins and winning raffles today.'}
+                  : authMode === 'forgotPassword'
+                    ? 'Enter your email to receive a password reset code.'
+                    : authMode === 'resetOtp'
+                      ? `Enter the recovery code sent to ${pendingEmail || formValues.email}.`
+                      : authMode === 'newPassword'
+                        ? 'Choose a strong new password to continue.'
+                        : isLogin
+                          ? 'Enter your details to access your wallet.'
+                          : 'Start earning AR coins and winning raffles today.'}
               </p>
 
               {showOtp ? (
@@ -353,6 +424,128 @@ export default function LandingView({ onAuthenticate }) {
                     Back
                   </button>
                 </form>
+              ) : authMode === 'forgotPassword' ? (
+                <form onSubmit={handleSendResetOtp} className="space-y-4">
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
+                    <input
+                      type="email"
+                      placeholder="Email Address"
+                      required
+                      value={formValues.email}
+                      onChange={handleChange('email')}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                    />
+                  </div>
+
+                  {errorMsg && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
+                      {errorMsg}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {isLoading ? 'Processing...' : 'Send Reset Code'}
+                  </button>
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('signIn');
+                        setErrorMsg('');
+                        setSuccessMsg('');
+                      }}
+                      className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                    >
+                      Back to Sign In
+                    </button>
+                  </div>
+                </form>
+              ) : authMode === 'resetOtp' ? (
+                <form onSubmit={handleVerifyResetOtp} className="space-y-6">
+                  <div className="grid grid-cols-6 gap-3 justify-center">
+                    {otpValues.map((value, index) => (
+                      <input
+                        key={index}
+                        ref={(el) => { otpRefs.current[index] = el; }}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={1}
+                        value={value}
+                        onChange={(e) => handleOtpChange(e, index)}
+                        onKeyDown={(e) => handleOtpKeyDown(e, index)}
+                        className="w-12 h-14 text-center text-2xl font-black text-slate-900 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    ))}
+                  </div>
+
+                  {errorMsg && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
+                      {errorMsg}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {isLoading ? 'Processing...' : 'Verify Recovery Code'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('forgotPassword');
+                      resetOtpFields();
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                    }}
+                    className="w-full py-4 bg-slate-100 text-slate-700 rounded-xl font-bold border border-slate-200 hover:bg-slate-200 transition-all active:scale-95"
+                  >
+                    Back
+                  </button>
+                </form>
+              ) : authMode === 'newPassword' ? (
+                <form onSubmit={handleUpdatePassword} className="space-y-4">
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
+                    <input
+                      type="password"
+                      placeholder="New Password"
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                    />
+                  </div>
+
+                  {errorMsg && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
+                      {errorMsg}
+                    </div>
+                  )}
+
+                  {successMsg && (
+                    <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-600">
+                      {successMsg}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {isLoading ? 'Processing...' : 'Save New Password'}
+                  </button>
+                </form>
               ) : (
                 <form onSubmit={(e) => handleSubmit(e, formValues)} className="space-y-4">
                   {!isLogin && (
@@ -398,6 +591,26 @@ export default function LandingView({ onAuthenticate }) {
                       {errorMsg}
                     </div>
                   )}
+
+                  {successMsg && (
+                    <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-600">
+                      {successMsg}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('forgotPassword');
+                        setErrorMsg('');
+                        setSuccessMsg('');
+                      }}
+                      className="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
 
                   <button
                     type="submit"
