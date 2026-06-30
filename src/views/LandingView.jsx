@@ -15,6 +15,8 @@ export default function LandingView({ onAuthenticate }) {
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [resendTimer, setResendTimer] = useState(0);
+  const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
     if (authMode === 'idle') {
@@ -27,6 +29,22 @@ export default function LandingView({ onAuthenticate }) {
       document.body.style.overflow = '';
     };
   }, [authMode]);
+
+  useEffect(() => {
+    if (!showOtp || resendTimer <= 0) return;
+
+    const interval = setInterval(() => {
+      setResendTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [showOtp, resendTimer]);
 
   const handleChange = (field) => (e) => {
     setFormValues((prev) => ({ ...prev, [field]: e.target.value }));
@@ -67,6 +85,8 @@ export default function LandingView({ onAuthenticate }) {
     resetOtpFields();
     setPendingEmail('');
     setErrorMsg('');
+    setSuccessMsg('');
+    setResendTimer(0);
   };
 
   const handleSubmit = async (e, formValuesToSubmit) => {
@@ -123,6 +143,24 @@ export default function LandingView({ onAuthenticate }) {
 
       const profile = await SupabaseService.getUserProfile(userId);
       onAuthenticate(profile);
+    } catch (error) {
+      setErrorMsg(safeErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendTimer > 0) return;
+
+    setIsLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    try {
+      await SupabaseService.resendOtp(pendingEmail);
+      setResendTimer(60);
+      setSuccessMsg('Code resent successfully!');
     } catch (error) {
       setErrorMsg(safeErrorMessage(error));
     } finally {
@@ -244,7 +282,7 @@ export default function LandingView({ onAuthenticate }) {
               </h2>
               <p className="text-slate-500 font-medium mb-8">
                 {showOtp
-                  ? 'Check your email for the 6-digit code.'
+                  ? `We have sent a 6-digit verification code to ${pendingEmail}. Please enter it below.`
                   : isLogin
                     ? 'Enter your details to access your wallet.'
                     : 'Start earning AR coins and winning raffles today.'}
@@ -275,6 +313,12 @@ export default function LandingView({ onAuthenticate }) {
                     </div>
                   )}
 
+                  {successMsg && (
+                    <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-600">
+                      {successMsg}
+                    </div>
+                  )}
+
                   <button
                     type="submit"
                     disabled={isLoading}
@@ -285,9 +329,24 @@ export default function LandingView({ onAuthenticate }) {
 
                   <button
                     type="button"
+                    disabled={resendTimer > 0 || isLoading}
+                    onClick={handleResendOtp}
+                    className={`w-full py-2 text-center rounded-xl font-bold transition-all ${
+                      resendTimer > 0
+                        ? 'text-slate-400 cursor-not-allowed'
+                        : 'text-blue-600 hover:text-blue-700 hover:underline active:scale-95 cursor-pointer'
+                    }`}
+                  >
+                    {resendTimer > 0 ? `Resend code in ${resendTimer}s` : "Didn't receive a code? Resend"}
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => {
                       setShowOtp(false);
                       resetOtpFields();
+                      setSuccessMsg('');
+                      setResendTimer(0);
                     }}
                     className="w-full py-4 bg-slate-100 text-slate-700 rounded-xl font-bold border border-slate-200 hover:bg-slate-200 transition-all active:scale-95"
                   >

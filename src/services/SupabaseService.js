@@ -28,6 +28,14 @@ export const SupabaseService = {
     if (error) throw error;
     return data;
   },
+      async resendOtp(email) {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email,
+    });
+    if (error) throw error;
+    return true;
+  },
 
   async signOut() {
     await supabase.auth.signOut();
