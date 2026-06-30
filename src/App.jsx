@@ -43,6 +43,7 @@ export default function App() {
   const [profileSubPage, setProfileSubPage] = useState('menu');
   const [userProfile, setUserProfile] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
   
   // Modals & Trays
   const [isWalletOpen, setIsWalletOpen] = useState(false);
@@ -85,6 +86,25 @@ export default function App() {
   ]);
 
   const notificationRef = useRef(null);
+  const toastTimerRef = useRef(null);
+
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = setTimeout(() => {
+      setToastMsg('');
+    }, 3000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
 
   // ---------------------------------------------------------
   // INITIALIZATION & DATA FETCHING
@@ -167,13 +187,12 @@ export default function App() {
     // Example: setActiveTab('wallet');
   };
 
-  const handleSignOut = async () => {
+  const handleLogout = async () => {
     AudioEngine.playClick();
-    const confirmLogout = window.confirm("Are you sure you want to securely sign out of your AnonRoom account?");
-    if (!confirmLogout) return;
 
     try {
       await SupabaseService.signOut();
+      showToast('Successfully signed out');
       setUserProfile(null);
       setIsAuthenticated(false);
       setActiveTab('home');
@@ -184,7 +203,7 @@ export default function App() {
       setIsWalletOpen(false);
     } catch (error) {
       console.error('Sign out failed:', error);
-      alert('Unable to sign out right now. Please try again.');
+      showToast('Unable to sign out right now. Please try again.');
     }
   };
 
@@ -259,8 +278,16 @@ export default function App() {
     { id: 'profile', label: 'Profile', icon: User }
   ];
 
-  return isAuthenticated ? (
-    <div className="w-full h-full flex bg-slate-50 text-slate-900 font-sans overflow-hidden">
+  return (
+    <>
+      {toastMsg && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl animate-fade-in font-medium">
+          {toastMsg}
+        </div>
+      )}
+
+      {isAuthenticated ? (
+        <div className="w-full h-full flex bg-slate-50 text-slate-900 font-sans overflow-hidden">
       
       {/* =========================================================
           DESKTOP SIDEBAR
@@ -529,7 +556,7 @@ export default function App() {
         handleOpenWallet();
       }
     }}
-    onSignOut={handleSignOut}
+    onSignOut={handleLogout}
     initialPage={safeInitialPage} 
   />
 )}
@@ -623,7 +650,7 @@ export default function App() {
                     <Settings className="w-5 h-5 text-slate-400" /> KYC & Verification
                   </button>
                   <button
-                    onClick={handleSignOut}
+                    onClick={handleLogout}
                     className="w-full flex items-center gap-3 px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-100 rounded-2xl font-semibold text-red-600 transition-colors mt-8"
                   >
                     <LogOut className="w-5 h-5" /> Sign Out
@@ -646,14 +673,16 @@ export default function App() {
         onBalanceUpdate={reloadUserData}
       />
 
-    </div>
-  ) : (
-    <LandingView
-      onAuthenticate={(userData) => {
-        setUserProfile(userData);
-        setIsAuthenticated(true);
-        setActiveTab('home');
-      }}
-    />
+        </div>
+      ) : (
+        <LandingView
+          onAuthenticate={(userData) => {
+            setUserProfile(userData);
+            setIsAuthenticated(true);
+            setActiveTab('home');
+          }}
+        />
+      )}
+    </>
   );
 }

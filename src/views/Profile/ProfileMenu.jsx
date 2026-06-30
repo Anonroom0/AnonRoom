@@ -17,8 +17,6 @@ export default function ProfileMenu({ navigateTo, userProfile, onSignOut }) {
   
   const handleSignOut = async () => {
     AudioEngine.playClick();
-    const confirmLogout = window.confirm("Are you sure you want to securely sign out of your AnonRoom account?");
-    if (!confirmLogout) return;
 
     if (typeof onSignOut === 'function') {
       await onSignOut();

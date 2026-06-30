@@ -119,7 +119,15 @@ export default function LandingView({ onAuthenticate }) {
       const profile = await SupabaseService.getUserProfile(session.user.id);
       onAuthenticate(profile);
     } catch (error) {
-      setErrorMsg(safeErrorMessage(error));
+      const message = safeErrorMessage(error);
+      if (
+        message.includes('User already registered') ||
+        message.includes('already exists')
+      ) {
+        setErrorMsg('This email is already registered. Please sign in instead.');
+      } else {
+        setErrorMsg(message);
+      }
     } finally {
       setIsLoading(false);
     }
