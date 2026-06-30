@@ -281,7 +281,7 @@ export default function App() {
   return (
     <>
       {toastMsg && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl animate-fade-in font-medium">
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl font-medium animate-fade-in">
           {toastMsg}
         </div>
       )}

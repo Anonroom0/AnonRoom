@@ -4,15 +4,24 @@ export const SupabaseService = {
   // ==========================================
   // AUTHENTICATION
   // ==========================================
-  async signUp(email, password, name) {
+    async signUp(email, password, name) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name } } // Sends name to the SQL trigger we just made
+      options: { data: { name } } 
     });
+    
     if (error) throw error;
+    
+    // SUPABASE TRICK: If the user already exists, Supabase returns a fake 
+    // user object with an empty identities array. We catch it here.
+    if (data?.user?.identities?.length === 0) {
+      throw new Error("This email is already registered. Please sign in instead.");
+    }
+    
     return data;
   },
+
 
   async signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
