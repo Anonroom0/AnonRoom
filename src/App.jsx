@@ -43,7 +43,6 @@ export default function App() {
   const [profileSubPage, setProfileSubPage] = useState('menu');
   const [userProfile, setUserProfile] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   
   // Modals & Trays
   const [isWalletOpen, setIsWalletOpen] = useState(false);
@@ -100,18 +99,43 @@ export default function App() {
   };
 
   useEffect(() => {
-    async function initApp() {
+    const checkSession = async () => {
       try {
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Smooth loading experience
-        const data = await MockAPI.getProfile();
-        setUserProfile(data);
+        const session = await SupabaseService.getSession();
+
+        if (session?.user?.id) {
+          const profile = await SupabaseService.getUserProfile(session.user.id);
+          setUserProfile(profile);
+          setIsAuthenticated(true);
+        } else {
+          setUserProfile(null);
+          setIsAuthenticated(false);
+        }
       } catch (err) {
-        console.error("Initialization Error:", err);
-      } finally {
-        setIsLoading(false);
+        console.error('Session initialization failed:', err);
+        setUserProfile(null);
+        setIsAuthenticated(false);
       }
-    }
-    initApp();
+    };
+
+    checkSession();
+
+    const { data: authListener } = SupabaseService.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUserProfile(null);
+        setIsAuthenticated(false);
+      } else if (event === 'SIGNED_IN' && session?.user?.id) {
+        try {
+          const profile = await SupabaseService.getUserProfile(session.user.id);
+          setUserProfile(profile);
+          setIsAuthenticated(true);
+        } catch (err) {
+          console.error('Failed to load profile after sign in:', err);
+          setUserProfile(null);
+          setIsAuthenticated(false);
+        }
+      }
+    });
 
     // Close notification tray when clicking outside
     const handleClickOutside = (event) => {
@@ -120,7 +144,10 @@ export default function App() {
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      authListener?.subscription.unsubscribe();
+    };
   }, []);
 
   // ---------------------------------------------------------
@@ -218,29 +245,6 @@ export default function App() {
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true, isExpanded: false })));
     setUnreadCount(0);
   };
-
-  // ---------------------------------------------------------
-    // ---------------------------------------------------------
-  // RENDER: LOADING STATE
-  // ---------------------------------------------------------
-  if (isLoading) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-6 animate-pop-in">
-          
-          {/* Beautiful SVG Logo on Splash Screen */}
-          <BrandLogo className="w-16 h-16 shadow-xl shadow-blue-600/30 rounded-3xl" />
-          
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-2.5 h-2.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-2.5 h-2.5 bg-blue-200 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-          </div>
-          <p className="text-sm font-semibold text-slate-500">Loading your workspace...</p>
-        </div>
-      </div>
-    );
-  }
 
   const safeActiveTab = activeTab || 'home';
   const safeUserProfile = userProfile || {};

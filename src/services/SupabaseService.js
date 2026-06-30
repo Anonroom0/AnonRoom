@@ -46,6 +46,10 @@ export const SupabaseService = {
     return session;
   },
 
+  onAuthStateChange(callback) {
+    return supabase.auth.onAuthStateChange(callback);
+  },
+
   // ==========================================
   // DATABASE QUERIES
   // ==========================================
