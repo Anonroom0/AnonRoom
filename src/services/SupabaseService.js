@@ -95,7 +95,12 @@ export const SupabaseService = {
       .eq('id', userId)
       .single();
     if (error) throw error;
-    return data;
+    if (!data) return data;
+    return {
+      ...data,
+      id: data.id || data.user_id,
+      user_id: data.user_id || data.id
+    };
   },
     // --- HOME VIEW API ---
   async getHomeStats(userId) {
@@ -224,7 +229,8 @@ export const SupabaseService = {
         if (!pErr && p) profiles = p;
       }
 
-      const leaderboardWithProfiles = leaderboard.map((l) => ({
+      const leaderboardWithProfiles = leaderboard.map((l, index) => ({
+        rank: index + 1,
         ...l,
         profile: profiles.find((p) => p.id === l.user_id) || null
       }));
@@ -235,77 +241,71 @@ export const SupabaseService = {
     }
   },
 
-  async buyRaffleTickets(userId, raffleId, qty, price, fee = 0) {
+    async buyRaffleTickets(userId, raffleId, qty, price, fee = 0) {
     try {
-      qty = Number(qty);
-      price = Number(price);
-      fee = Number(fee || 0);
-      if (!qty || qty <= 0) throw new Error('Quantity must be > 0');
+      // 1. Calculate the exact total spent (so it is never null)
+      const totalSpent = (qty * price) + fee;
 
-      // Load necessary records
-      const { data: profile, error: profileErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      if (profileErr) throw profileErr;
-
-      const { data: raffle, error: raffleErr } = await supabase
-        .from('raffles')
-        .select('*')
-        .eq('id', raffleId)
-        .single();
-      if (raffleErr) throw raffleErr;
-
-      const total = qty * price + fee;
-      if (Number(profile.ar_balance || 0) < total) throw new Error('Insufficient AR balance');
-
-      // Insert entry
-      const { data: insertedEntries, error: insertErr } = await supabase
+      // 2. Insert the ticket entry
+      const { error: entryError } = await supabase
         .from('entries')
-        .insert([{
+        .insert({
           user_id: userId,
           raffle_id: raffleId,
-          qty,
-          price_per_ticket: price,
-          fee: fee,
-          total_price: total,
-          created_at: new Date().toISOString()
-        }])
-        .select();
+          qty: qty,
+          total_spent: totalSpent // <-- This fixes your error!
+        });
 
-      if (insertErr) throw insertErr;
-      const inserted = (insertedEntries && insertedEntries[0]) || null;
+      if (entryError) throw entryError;
 
-      // Update raffle tickets_sold
-      const newTickets = (Number(raffle.tickets_sold || 0) + qty);
-      const { error: raffleUpdateErr } = await supabase
-        .from('raffles')
-        .update({ tickets_sold: newTickets })
-        .eq('id', raffleId);
-      if (raffleUpdateErr) {
-        // rollback entry
-        if (inserted && inserted.id) await supabase.from('entries').delete().eq('id', inserted.id);
-        throw raffleUpdateErr;
-      }
+      // 3. Log the transaction in the wallet
+      const { error: txError } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: userId,
+          type: 'ticket_purchase',
+          amount: -totalSpent, // Negative because AR is being spent
+          status: 'completed'
+        });
 
-      // Deduct from profile balance
-      const { error: profileUpdateErr } = await supabase
+      if (txError) throw txError;
+
+      // 4. Fetch the user's current balance to deduct it safely
+      const { data: profile, error: profileFetchError } = await supabase
         .from('profiles')
-        .update({ ar_balance: Number(profile.ar_balance || 0) - total })
+        .select('ar_balance')
+        .eq('id', userId)
+        .single();
+        
+      if (profileFetchError) throw profileFetchError;
+
+      const { error: profileUpdateError } = await supabase
+        .from('profiles')
+        .update({ ar_balance: profile.ar_balance - totalSpent })
         .eq('id', userId);
-      if (profileUpdateErr) {
-        // rollback raffle and entry
-        await supabase.from('raffles').update({ tickets_sold: raffle.tickets_sold || 0 }).eq('id', raffleId);
-        if (inserted && inserted.id) await supabase.from('entries').delete().eq('id', inserted.id);
-        throw profileUpdateErr;
+
+      if (profileUpdateError) throw profileUpdateError;
+
+      // 5. Update the tickets_sold count on the raffle
+      const { data: raffle, error: raffleFetchError } = await supabase
+        .from('raffles')
+        .select('tickets_sold')
+        .eq('id', raffleId)
+        .single();
+
+      if (!raffleFetchError && raffle) {
+        await supabase
+          .from('raffles')
+          .update({ tickets_sold: raffle.tickets_sold + qty })
+          .eq('id', raffleId);
       }
 
-      return { success: true, entry: inserted };
-    } catch (err) {
-      throw err;
-    }
-  },
+      return true;
+    } catch (error) {
+      console.error("Purchase Error:", error);
+      throw error;
+    }  },
+
 
   async getMyTickets(userId) {
     try {

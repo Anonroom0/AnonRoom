@@ -33,6 +33,9 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
   const [activeSubTab, setActiveSubTab] = useState('buy'); // 'buy' | 'mytickets' | 'info' | 'leaderboard'
   const auth = useAuth();
   const [leaderboard, setLeaderboard] = useState([]);
+  const [myRaffleTickets, setMyRaffleTickets] = useState([]);
+  const [isMyTicketsLoading, setIsMyTicketsLoading] = useState(false);
+  const [purchaseError, setPurchaseError] = useState(null);
   
   // Checkout State
   const [ticketQuantity, setTicketQuantity] = useState(1);
@@ -53,12 +56,6 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
     { rank: 3, name: "Aman Gupta", tickets: 42, avatar: "AG", color: "bg-orange-100 text-orange-700" },
     { rank: 4, name: "Neha Mishra", tickets: 20, avatar: "NM", color: "bg-blue-100 text-blue-700" },
     { rank: 5, name: "Vaibhav S.", tickets: 12, avatar: "VS", color: "bg-purple-100 text-purple-700" }
-  ];
-
-  const mockUserTicketsForRaffle = [
-    { id: "TKT-9901-A", date: "June 25, 2026", status: "Active" },
-    { id: "TKT-9902-B", date: "June 25, 2026", status: "Active" },
-    { id: "TKT-9903-C", date: "June 26, 2026", status: "Active" }
   ];
 
   const recentBuyers = [
@@ -113,6 +110,43 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
     return () => { mounted = false; };
   }, [activeSubTab, selectedRaffle]);
 
+  useEffect(() => {
+    let mounted = true;
+    async function fetchMyTickets() {
+      const profileUserId = auth.userProfile?.id || auth.userProfile?.user_id;
+      if (!selectedRaffle || !profileUserId) return;
+      if (activeSubTab !== 'mytickets') return;
+      setIsMyTicketsLoading(true);
+      try {
+        const { active = [], past = [] } = await SupabaseService.getMyTickets(profileUserId);
+        if (!mounted) return;
+        const ticketsForRaffle = [...active, ...past]
+          .filter((item) => item.raffle_id === selectedRaffle.id)
+          .map((ticket) => ({
+            id: ticket.id,
+            raffle_id: ticket.raffle_id,
+            quantity_bought: Number(ticket.qty || ticket.quantity || ticket.quantity_bought || 0),
+            ticket_numbers: ticket.ticket_numbers || [],
+            purchased_at: ticket.created_at || ticket.purchased_at || Date.now(),
+            status: ticket.raffle?.status === 'active' ? 'Active' : 'Closed',
+            associatedPool: ticket.raffle || null
+          }));
+        setMyRaffleTickets(ticketsForRaffle);
+      } catch (err) {
+        console.error('Failed to load raffle ticket history:', err);
+        if (mounted) {
+          setMyRaffleTickets([]);
+        }
+      } finally {
+        if (mounted) {
+          setIsMyTicketsLoading(false);
+        }
+      }
+    }
+    fetchMyTickets();
+    return () => { mounted = false; };
+  }, [activeSubTab, selectedRaffle, auth.userProfile?.id, auth.userProfile?.user_id, purchaseStatus]);
+
   // ---------------------------------------------------------------------------
   // INTERACTION HANDLERS
   // ---------------------------------------------------------------------------
@@ -128,19 +162,19 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
     if (!selectedRaffle) return;
     try {
       AudioEngine.playClick();
+      setPurchaseError(null);
       setPurchaseStatus('processing');
-      // call buy API
       const { userProfile, setUserProfile } = auth;
-      if (!userProfile?.id) throw new Error('User not authenticated');
+      const session = await SupabaseService.getSession();
+      const authId = session?.user?.id;
+      const userId = authId || userProfile?.id;
+      if (!userId) throw new Error('User not authenticated');
 
-      // simulate small delay for UX
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const ticketPrice = selectedRaffle.ticket_price || selectedRaffle.price || 1.0;
+      await SupabaseService.buyRaffleTickets(userId, selectedRaffle.id, ticketQuantity, ticketPrice, 0);
 
-      await SupabaseService.buyRaffleTickets(userProfile.id, selectedRaffle.id, ticketQuantity, selectedRaffle.ticket_price || selectedRaffle.price || 1.0, 0);
-
-      // Refresh user profile balance and raffle counts
       try {
-        const freshProfile = await SupabaseService.getUserProfile(userProfile.id);
+        const freshProfile = await SupabaseService.getUserProfile(userId);
         setUserProfile && setUserProfile(freshProfile);
       } catch (e) {
         console.warn('Could not refresh profile', e);
@@ -156,6 +190,7 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
 
       setPurchaseStatus('success');
     } catch (err) {
+      setPurchaseError(err?.message || 'Could not complete purchase.');
       setPurchaseStatus('error');
     }
   };
@@ -362,7 +397,7 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
                   <div>
                     <h4 className="text-base font-bold text-slate-900">Transaction Failed</h4>
                     <p className="text-sm text-slate-600 font-medium mt-1">
-                      We couldn't process your purchase. Please check your balance and try again.
+                      {purchaseError || 'We couldn\'t process your purchase. Please check your balance and try again.'}
                     </p>
                   </div>
                 </div>
@@ -384,28 +419,40 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
                 <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                   <Ticket className="w-5 h-5 text-blue-500" /> Your Tickets for this Draw
                 </h3>
-                
-                <div className="space-y-3">
-                  {mockUserTicketsForRaffle.map((ticket, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl hover:border-blue-100 transition-colors group">
-                      <div className="flex flex-col">
-                        <span className="font-mono font-bold text-slate-900 text-sm group-hover:text-blue-600 transition-colors">
-                          {ticket.id}
-                        </span>
-                        <span className="text-xs font-medium text-slate-500 mt-0.5 flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> Bought on {ticket.date}
+
+                {isMyTicketsLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((index) => (
+                      <div key={index} className="h-20 rounded-3xl bg-slate-100 animate-pulse" />
+                    ))}
+                  </div>
+                ) : myRaffleTickets.length > 0 ? (
+                  <div className="space-y-3">
+                    {myRaffleTickets.map((ticket) => (
+                      <div key={ticket.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl hover:border-blue-100 transition-colors group">
+                        <div className="flex flex-col">
+                          <span className="font-mono font-bold text-slate-900 text-sm group-hover:text-blue-600 transition-colors">
+                            {ticket.id}
+                          </span>
+                          <span className="text-xs font-medium text-slate-500 mt-0.5 flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> Bought on {new Date(ticket.purchased_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </div>
+                        <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-lg">
+                          {ticket.status}
                         </span>
                       </div>
-                      <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-lg">
-                        {ticket.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-3xl bg-slate-50 border border-slate-200 p-6 text-center text-sm text-slate-500">
+                    You haven\'t purchased any tickets for this raffle yet. Buy tickets and come back to see them here.
+                  </div>
+                )}
 
                 <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
                   <span className="text-sm font-medium text-slate-500">Total Tickets Owned:</span>
-                  <span className="text-lg font-black text-slate-900">3</span>
+                  <span className="text-lg font-black text-slate-900">{myRaffleTickets.reduce((sum, t) => sum + Number(t.quantity_bought || 0), 0)}</span>
                 </div>
                 
                 <button 

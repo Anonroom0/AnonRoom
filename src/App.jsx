@@ -22,9 +22,9 @@ import {
   Gift,
   Users
 } from 'lucide-react';
-import { MockAPI } from './services/MockApi.js';
 import { AudioEngine } from './services/AudioEngine.js';
 import { SupabaseService } from './services/SupabaseService.js';
+import { AuthProvider } from './context/AuthContext.jsx';
 
 // Import Views
 import HomeView from './views/HomeView.jsx';
@@ -111,8 +111,11 @@ export default function App() {
   // ---------------------------------------------------------
   const reloadUserData = async () => {
     try {
-      const data = await MockAPI.getProfile();
-      setUserProfile(data);
+      const session = await SupabaseService.getSession();
+      if (session?.user?.id) {
+        const profile = await SupabaseService.getUserProfile(session.user.id);
+        setUserProfile(profile);
+      }
     } catch (err) {
       console.error("Failed to load user profile:", err);
     }
@@ -279,15 +282,16 @@ export default function App() {
   ];
 
   return (
-    <>
-      {toastMsg && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl font-medium animate-fade-in">
-          {toastMsg}
-        </div>
-      )}
+    <AuthProvider value={{ userProfile, setUserProfile }}>
+      <>
+        {toastMsg && (
+          <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl font-medium animate-fade-in">
+            {toastMsg}
+          </div>
+        )}
 
-      {isAuthenticated ? (
-        <div className="w-full h-full flex bg-slate-50 text-slate-900 font-sans overflow-hidden">
+        {isAuthenticated ? (
+          <div className="w-full h-full flex bg-slate-50 text-slate-900 font-sans overflow-hidden">
       
       {/* =========================================================
           DESKTOP SIDEBAR
@@ -683,6 +687,7 @@ export default function App() {
           }}
         />
       )}
-    </>
+      </>
+    </AuthProvider>
   );
 }
