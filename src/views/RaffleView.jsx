@@ -204,6 +204,12 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
     }
   };
 
+  const handleQuantityInput = (event) => {
+    const value = Number(event.target.value);
+    if (Number.isNaN(value)) return;
+    setTicketQuantity(Math.min(Math.max(value, 1), 100));
+  };
+
   // ---------------------------------------------------------------------------
   // FILTERING LOGIC
   // ---------------------------------------------------------------------------
@@ -329,9 +335,14 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
                     >
                       <Minus className="w-5 h-5" />
                     </button>
-                    <div className="w-14 text-center">
-                      <span className="text-lg font-black text-slate-900">{ticketQuantity}</span>
-                    </div>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={ticketQuantity}
+                      onChange={handleQuantityInput}
+                      className="w-20 text-center text-lg font-black text-slate-900 bg-transparent border-none outline-none"
+                    />
                     <button 
                       onClick={() => handleQuantityChange('increase')}
                       className="w-10 h-10 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-95 transition-all shadow-sm"

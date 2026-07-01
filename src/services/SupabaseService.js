@@ -301,10 +301,21 @@ export const SupabaseService = {
       }
 
       return true;
-    } catch (error) {
-      console.error("Purchase Error:", error);
+    }      catch (error) {
+      // 1. Check if the error is our specific balance constraint
+      if (
+        error.message.includes('prevent_negative_balance') || 
+        error.message.includes('Insufficient AR balance')
+      ) {
+        // 2. Throw a clean, friendly error for the UI to display
+        throw new Error("You don't have enough AR to buy this ticket. Please add funds.");
+      }
+
+      // If it's a different error, let it pass through
+      console.error("Purchase Error:", error.message);
       throw error;
-    }  },
+    }
+    },
 
 
   async getMyTickets(userId) {
