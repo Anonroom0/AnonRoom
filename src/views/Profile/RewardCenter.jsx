@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, 
   Gift, 
@@ -10,6 +10,7 @@ import {
   Filter
 } from 'lucide-react';
 import { AudioEngine } from '../../services/AudioEngine.js';
+import { SupabaseService } from '../../services/SupabaseService.js';
 
 /**
  * RewardCenter Component
@@ -17,16 +18,45 @@ import { AudioEngine } from '../../services/AudioEngine.js';
  * A premium voucher management system styled after top-tier exchange layouts.
  * Features structural ticket cutouts, dashed dividers, and seamless activation states.
  */
-export default function RewardCenter({ navigateTo }) {
+export default function RewardCenter({ navigateTo, userProfile, onRefresh }) {
   // ---------------------------------------------------------------------------
   // 1. COMPONENT STATE
   // ---------------------------------------------------------------------------
   const [rewardTab, setRewardTab] = useState('Ongoing'); // 'Ongoing' | 'Past'
   const [rewardPopup, setRewardPopup] = useState({ show: false, title: '' });
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [myRewards, setMyRewards] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadVouchers = async () => {
+      if (!userProfile?.id) return;
+      try {
+        setLoading(true);
+        const { ongoing, past } = await SupabaseService.getVouchers(userProfile.id);
+        const normalized = [...ongoing, ...past].map((voucher) => ({
+          id: voucher.id,
+          title: voucher.title || voucher.name || 'Voucher',
+          value: String(voucher.amount || voucher.value || 0),
+          unit: voucher.unit || 'AR',
+          desc: voucher.description || voucher.source || 'Reward voucher',
+          expiry: voucher.expires_at ? new Date(voucher.expires_at).toLocaleString() : 'No expiry',
+          tag: voucher.type || 'Reward',
+          isUsed: voucher.status === 'used' || voucher.status === 'expired'
+        }));
+        setMyRewards(normalized);
+      } catch (err) {
+        console.error('Failed to load vouchers:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadVouchers();
+  }, [userProfile?.id]);
+
   // High-fidelity mock data mimicking the Binance voucher types
-  const [myRewards, setMyRewards] = useState([
+  const [myRewardsSeed, setMyRewardsSeed] = useState([
     { 
       id: 'rew-1', 
       title: 'Trading Fee Rebate Voucher', 
@@ -93,19 +123,21 @@ export default function RewardCenter({ navigateTo }) {
   // 2. INTERACTION HANDLERS
   // ---------------------------------------------------------------------------
   
-  const handleActivateReward = (rewardId, rewardTitle) => {
+  const handleActivateReward = async (rewardId, rewardTitle) => {
     AudioEngine.playClick();
-    
-    // Mark as used in state
-    setMyRewards(prev => prev.map(r => r.id === rewardId ? { ...r, isUsed: true } : r));
-    
-    // Trigger Success Popup
-    setRewardPopup({ show: true, title: rewardTitle });
-    
-    // Auto-hide popup after 3.5 seconds
-    setTimeout(() => {
-      setRewardPopup({ show: false, title: '' });
-    }, 3500);
+    if (!userProfile?.id) return;
+
+    try {
+      await SupabaseService.useVoucher(rewardId, userProfile.id);
+      setMyRewards(prev => prev.map(r => r.id === rewardId ? { ...r, isUsed: true } : r));
+      setRewardPopup({ show: true, title: rewardTitle });
+      onRefresh?.();
+      setTimeout(() => {
+        setRewardPopup({ show: false, title: '' });
+      }, 3500);
+    } catch (err) {
+      console.error('Failed to use voucher:', err);
+    }
   };
 
   const handleTabSwitch = (tab) => {
@@ -230,7 +262,12 @@ export default function RewardCenter({ navigateTo }) {
             VOUCHERS GRID (THE BINANCE LAYOUT)
             ==================================================================== */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
-          {displayedRewards.length === 0 ? (
+          {loading ? (
+            <div className="col-span-full py-20 flex flex-col items-center justify-center text-center bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
+              <Gift className="w-10 h-10 text-slate-300" />
+              <h3 className="text-lg font-bold text-slate-700 mt-4">Loading vouchers…</h3>
+            </div>
+          ) : displayedRewards.length === 0 ? (
             
             /* Empty State */
             <div className="col-span-full py-20 flex flex-col items-center justify-center text-center bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">

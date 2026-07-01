@@ -21,6 +21,8 @@ import {
   Zap,
   Info
 } from 'lucide-react';
+import { SupabaseService } from '../services/SupabaseService.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 /**
  * ============================================================================
@@ -37,7 +39,7 @@ export default function RedeemView({ navigateTo, userProfile }) {
   // --------------------------------------------------------------------------
   // STATE MANAGEMENT
   // --------------------------------------------------------------------------
-  const [activeCategory, setActiveCategory] = useState('All');
+  const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('popular'); // popular, price-low, price-high
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -46,162 +48,79 @@ export default function RedeemView({ navigateTo, userProfile }) {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [purchaseStep, setPurchaseStep] = useState('idle'); // idle, confirm, processing, success, error
   
-  // User Balance (Mocking from profile or defaulting for demo)
-  const [userBalance, setUserBalance] = useState(userProfile?.arBalance || 15500);
+  const auth = useAuth();
+  const activeUserProfile = userProfile || auth?.userProfile;
+  // User Balance (derive from auth profile, fallback to prop or demo)
+  const [userBalance, setUserBalance] = useState(Number(activeUserProfile?.ar_balance ?? activeUserProfile?.arBalance ?? 0));
+  const [toast, setToast] = useState(null);
 
   // --------------------------------------------------------------------------
-  // MOCK DATABASE: CATEGORIES & PRODUCTS
+  // CATEGORIES & PRODUCT STATE
   // --------------------------------------------------------------------------
   const categories = [
-    { id: 'All', label: 'All Rewards', icon: ShoppingBag },
-    { id: 'Electronics', label: 'Tech & Gadgets', icon: Smartphone },
-    { id: 'Gaming', label: 'Gaming Gear', icon: Gamepad },
-    { id: 'GiftCards', label: 'Gift Cards', icon: Gift },
-    { id: 'Vouchers', label: 'Platform Vouchers', icon: Ticket }
+    { id: 'all', label: 'All Rewards', icon: ShoppingBag },
+    { id: 'tech & gadgets', label: 'Tech & Gadgets', icon: Smartphone },
+    { id: 'gaming gear', label: 'Gaming Gear', icon: Gamepad },
+    { id: 'gift cards', label: 'Gift Cards', icon: Gift },
+    { id: 'platform voucher', label: 'Platform Voucher', icon: Ticket }
   ];
 
-  const products = [
-    {
-      id: 'prod-001',
-      title: 'iPhone 15 Pro Max',
-      description: '256GB, Titanium Finish. The ultimate prize for top earners.',
-      category: 'Electronics',
-      price: 150000,
-      originalPrice: 165000,
-      stock: 3,
-      image: 'https://images.unsplash.com/photo-1696446701796-da61225697cc?w=800&q=80',
-      rating: 4.9,
-      reviews: 128,
-      isFeatured: true,
-      tags: ['Premium', 'Limited']
-    },
-    {
-      id: 'prod-002',
-      title: 'Sony PlayStation 5',
-      description: 'Disc Edition Console with one DualSense wireless controller.',
-      category: 'Gaming',
-      price: 45000,
-      originalPrice: 50000,
-      stock: 12,
-      image: 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?w=800&q=80',
-      rating: 4.8,
-      reviews: 342,
-      isFeatured: true,
-      tags: ['Bestseller']
-    },
-    {
-      id: 'prod-003',
-      title: '$50 Amazon Gift Card',
-      description: 'Digital gift card delivered instantly to your registered email.',
-      category: 'GiftCards',
-      price: 5000,
-      originalPrice: null,
-      stock: 999,
-      image: 'https://images.unsplash.com/photo-1628151015968-3a4429e9ef04?w=800&q=80',
-      rating: 4.7,
-      reviews: 890,
-      isFeatured: false,
-      tags: ['Instant Delivery']
-    },
-    {
-      id: 'prod-004',
-      title: 'Apple AirPods Pro (2nd Gen)',
-      description: 'Active Noise Cancellation, personalized spatial audio.',
-      category: 'Electronics',
-      price: 24000,
-      originalPrice: 26000,
-      stock: 25,
-      image: 'https://images.unsplash.com/photo-1603351154351-5e2d0600bb77?w=800&q=80',
-      rating: 4.9,
-      reviews: 56,
-      isFeatured: false,
-      tags: ['Audio']
-    },
-    {
-      id: 'prod-005',
-      title: 'Steam Wallet $20',
-      description: 'Add funds to your Steam Wallet for games, software, and more.',
-      category: 'Gaming',
-      price: 2100,
-      originalPrice: null,
-      stock: 150,
-      image: 'https://images.unsplash.com/photo-1614680376593-902f74cf0d41?w=800&q=80',
-      rating: 4.8,
-      reviews: 412,
-      isFeatured: false,
-      tags: ['Digital']
-    },
-    {
-      id: 'prod-006',
-      title: '10 USDT Trading Voucher',
-      description: 'Rebate voucher for spot trading fees on partner exchanges.',
-      category: 'Vouchers',
-      price: 1000,
-      originalPrice: 1200,
-      stock: 500,
-      image: 'https://images.unsplash.com/photo-1621416894569-0f39ed31d247?w=800&q=80',
-      rating: 4.5,
-      reviews: 89,
-      isFeatured: false,
-      tags: ['Crypto']
-    },
-    {
-      id: 'prod-007',
-      title: 'Logitech G Pro X Superlight',
-      description: 'Ultra-lightweight wireless gaming mouse designed for esports.',
-      category: 'Gaming',
-      price: 15000,
-      originalPrice: 16000,
-      stock: 8,
-      image: 'https://images.unsplash.com/photo-1615663245857-ac1eeb536624?w=800&q=80',
-      rating: 4.9,
-      reviews: 210,
-      isFeatured: true,
-      tags: ['Esports']
-    },
-    {
-      id: 'prod-008',
-      title: 'Netflix 1-Month Premium',
-      description: '4K+HDR streaming for up to 4 devices simultaneously.',
-      category: 'GiftCards',
-      price: 2000,
-      originalPrice: 2200,
-      stock: 300,
-      image: 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=800&q=80',
-      rating: 4.8,
-      reviews: 670,
-      isFeatured: false,
-      tags: ['Entertainment']
-    },
-    {
-      id: 'prod-009',
-      title: 'Free Shipping Pass',
-      description: 'Waive shipping fees on your next physical reward redemption.',
-      category: 'Vouchers',
-      price: 500,
-      originalPrice: null,
-      stock: 1000,
-      image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&q=80',
-      rating: 4.2,
-      reviews: 45,
-      isFeatured: false,
-      tags: ['Utility']
-    },
-    {
-      id: 'prod-010',
-      title: 'MacBook Air M3',
-      description: '13-inch, 16GB RAM, 512GB SSD. The ultimate portable workstation.',
-      category: 'Electronics',
-      price: 120000,
-      originalPrice: 135000,
-      stock: 2,
-      image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&q=80',
-      rating: 5.0,
-      reviews: 24,
-      isFeatured: true,
-      tags: ['Premium']
+  const [products, setProducts] = useState([]);
+
+  const normalizeCategory = (value) => {
+    const category = String(value || '').toLowerCase();
+    if (category.includes('gift')) return 'gift cards';
+    if (category.includes('game')) return 'gaming gear';
+    if (category.includes('voucher') || category.includes('platform')) return 'platform voucher';
+    return 'tech & gadgets';
+  };
+
+  const getCategoryDisplay = (value) => {
+    const category = String(value || '').toLowerCase();
+    const found = categories.find((c) => c.id === category);
+    return found?.label || 'Tech & Gadgets';
+  };
+
+  // Fetch products from Supabase on mount and map to UI shape
+  useEffect(() => {
+    let mounted = true;
+    async function loadProducts() {
+      try {
+        const data = await SupabaseService.getProducts();
+        if (!mounted || !data) return;
+
+        const mapped = data.map((p) => ({
+          id: p.id,
+          title: p.name || p.title || p.label || 'Product',
+          description: p.description || p.desc || 'Available for immediate redemption.',
+          category: normalizeCategory(p.category || p.type || p.kind),
+          label: p.label || p.badge || (p.type === 'digital' ? 'Instant delivery' : 'Limited release'),
+          price: Number(p.price_ar ?? p.price ?? p.cost ?? 0),
+          originalPrice: Number(p.original_price ?? p.originalPrice ?? 0) || null,
+          stock: Number(p.stock ?? p.inventory ?? 0),
+          image: p.image_url || p.image || '',
+          rating: 4.5,
+          reviews: p.reviews || 0,
+          isFeatured: p.is_featured || p.isFeatured || false,
+          tags: Array.isArray(p.tags) ? p.tags : [],
+          type: String(p.type || (p.digital ? 'digital' : 'physical')).toLowerCase()
+        }));
+
+        setProducts(mapped);
+      } catch (err) {
+        console.warn('Failed to load products from Supabase:', err);
+      }
     }
-  ];
+    loadProducts();
+    return () => { mounted = false; };
+  }, []);
+
+  // Sync userBalance when the active profile changes
+  useEffect(() => {
+    if (activeUserProfile?.id) {
+      setUserBalance(Number(activeUserProfile?.ar_balance ?? activeUserProfile?.arBalance ?? 0));
+    }
+  }, [activeUserProfile?.id, activeUserProfile?.ar_balance, activeUserProfile?.arBalance]);
 
   // --------------------------------------------------------------------------
   // DERIVED STATE & FILTERING LOGIC
@@ -210,8 +129,8 @@ export default function RedeemView({ navigateTo, userProfile }) {
     let result = [...products];
 
     // 1. Category Filter
-    if (activeCategory !== 'All') {
-      result = result.filter(p => p.category === activeCategory);
+    if (activeCategory !== 'all') {
+      result = result.filter((p) => p.category === activeCategory);
     }
 
     // 2. Search Filter
@@ -262,10 +181,9 @@ export default function RedeemView({ navigateTo, userProfile }) {
     setPurchaseStep('idle');
   };
 
-  const executePurchase = () => {
-    if (!selectedProduct) return;
-    
-    // Check balance again for security
+  const executePurchase = async () => {
+    if (!selectedProduct || !activeUserProfile?.id) return;
+
     if (userBalance < selectedProduct.price) {
       setPurchaseStep('error');
       return;
@@ -274,19 +192,30 @@ export default function RedeemView({ navigateTo, userProfile }) {
     if (window.AudioEngine) window.AudioEngine.playClick();
     setPurchaseStep('processing');
 
-    // Simulate API Call and Processing Time
-    setTimeout(() => {
-      // Deduct Balance
-      setUserBalance(prev => prev - selectedProduct.price);
-      
-      // Update Step to Success
+    try {
+      await SupabaseService.redeemProduct(
+        activeUserProfile.id,
+        selectedProduct.id,
+        selectedProduct.price,
+        selectedProduct.type === 'digital' ? 'digital' : 'physical'
+      );
+
+      const refreshedProfile = await SupabaseService.getUserProfile(activeUserProfile.id);
+      if (refreshedProfile?.ar_balance != null) {
+        setUserBalance(Number(refreshedProfile.ar_balance || 0));
+      } else {
+        setUserBalance((prev) => prev - selectedProduct.price);
+      }
+
       setPurchaseStep('success');
-      
-      // Play success sound if available
+
       if (window.AudioEngine && typeof window.AudioEngine.playSuccess === 'function') {
         window.AudioEngine.playSuccess();
       }
-    }, 1500);
+    } catch (error) {
+      console.error('Redemption failed:', error);
+      setPurchaseStep('error');
+    }
   };
 
   const navigateToWinningsPage = () => {
@@ -387,12 +316,18 @@ export default function RedeemView({ navigateTo, userProfile }) {
         <div className="p-5 flex flex-col flex-1">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
-              {categories.find(c => c.id === product.category)?.label || product.category}
+              {getCategoryDisplay(product.category)}
             </span>
             <div className="flex items-center gap-1 text-slate-500 text-xs font-medium">
               <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-              {product.rating} ({product.reviews})
+              4.5 ({product.reviews})
             </div>
+          </div>
+
+          <div className="mb-2">
+            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">
+              {product.label}
+            </span>
           </div>
           
           <h3 className="font-black text-slate-900 text-lg leading-tight mb-1.5 line-clamp-2">
@@ -472,7 +407,7 @@ export default function RedeemView({ navigateTo, userProfile }) {
                   <img src={selectedProduct.image} alt="" className="w-16 h-16 rounded-xl object-cover" />
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-slate-900 truncate">{selectedProduct.title}</h4>
-                    <p className="text-xs text-slate-500 truncate">{selectedProduct.category}</p>
+                    <p className="text-xs text-slate-500 truncate">{getCategoryDisplay(selectedProduct.category)}</p>
                   </div>
                 </div>
 
@@ -634,7 +569,7 @@ export default function RedeemView({ navigateTo, userProfile }) {
           <button 
             onClick={() => { if (window.AudioEngine) window.AudioEngine.playClick(); setIsFilterOpen(!isFilterOpen); }}
             className={`p-3 rounded-xl border transition-colors shadow-sm flex items-center justify-center gap-2 ${
-              isFilterOpen || activeCategory !== 'All' 
+              isFilterOpen || activeCategory !== 'all' 
                 ? 'bg-blue-50 border-blue-200 text-blue-600' 
                 : 'bg-white border-slate-200 text-slate-600'
             }`}
@@ -671,7 +606,7 @@ export default function RedeemView({ navigateTo, userProfile }) {
         {/* Results Info */}
         <div className="flex items-center justify-between px-1">
           <h2 className="text-xl font-black text-slate-900">
-            {activeCategory === 'All' ? 'Discover Rewards' : categories.find(c => c.id === activeCategory)?.label}
+            {activeCategory === 'all' ? 'Discover Rewards' : categories.find(c => c.id === activeCategory)?.label}
           </h2>
           <span className="text-sm font-bold text-slate-500 bg-slate-200/50 px-3 py-1 rounded-full">
             {filteredProducts.length} Items
@@ -689,7 +624,7 @@ export default function RedeemView({ navigateTo, userProfile }) {
               We couldn't find any items matching your current filters or search query. Try adjusting your criteria.
             </p>
             <button 
-              onClick={() => { setSearchQuery(''); setActiveCategory('All'); }}
+              onClick={() => { setSearchQuery(''); setActiveCategory('all'); }}
               className="mt-6 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors"
             >
               Clear All Filters

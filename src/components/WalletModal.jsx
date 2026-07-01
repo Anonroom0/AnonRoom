@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AudioEngine } from '../services/AudioEngine.js';
+import { SupabaseService } from '../services/SupabaseService.js';
+import { useAuth } from '../context/AuthContext.jsx';
 import { 
   X, 
   Wallet, 
@@ -21,6 +23,9 @@ import {
 } from 'lucide-react';
 
 export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpdate }) {
+  const { userProfile: authUser } = useAuth();
+  const activeProfile = authUser || userProfile;
+
   // ---------------------------------------------------------------------------
   // STATE MANAGEMENT
   // ---------------------------------------------------------------------------
@@ -31,9 +36,11 @@ export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpd
   const [timeRemaining, setTimeRemaining] = useState(600); // 10 minutes
   const [isLocked, setIsLocked] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [depositData, setDepositData] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(0);
   
   // History & Filter States
-  const [historyLogs, setHistoryLogs] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [historyFilter, setHistoryFilter] = useState('all'); // 'all' | 'deposits' | 'spending'
   
   // UI States
@@ -68,46 +75,80 @@ export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpd
   // LIFECYCLE & EFFECTS
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    if (!isOpen) return;
-    
-    // Load rich mock transaction history
-    setHistoryLogs([
-      { id: 'tx-8921', type: 'Deposit', category: 'deposit', amount: 45.00, stamp: 'June 25, 2026 • 10:22 AM', status: 'Completed' },
-      { id: 'tx-8922', type: 'Ticket Purchase', category: 'spending', amount: -5.00, stamp: 'June 26, 2026 • 02:10 PM', status: 'Completed' },
-      { id: 'tx-8923', type: 'Reward Credit', category: 'deposit', amount: 30.00, stamp: 'June 28, 2026 • 07:15 PM', status: 'Completed' },
-      { id: 'tx-8924', type: 'Ticket Purchase', category: 'spending', amount: -2.00, stamp: 'June 28, 2026 • 07:20 PM', status: 'Completed' },
-      { id: 'tx-8925', type: 'Deposit', category: 'deposit', amount: 100.00, stamp: 'June 29, 2026 • 09:00 AM', status: 'Pending' }
-    ]);
+    if (!isOpen || !activeProfile?.id) return;
 
-    // Timer Logic for Deposit Address
-    let clockInterval = null;
-    if (isLocked && timeRemaining > 0) {
-      clockInterval = setInterval(() => {
-        setTimeRemaining(prev => {
-          if (prev <= 1) {
-            clearInterval(clockInterval);
-            setIsLocked(false);
-            setDepositAddress('');
-            return 600;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    const fetchTransactions = async () => {
+      try {
+        const data = await SupabaseService.getTransactions(activeProfile.id);
+        setTransactions(data.map((tx) => {
+          const amount = typeof tx.amount === 'number' ? tx.amount : parseFloat(tx.amount) || 0;
+          const amountIsPositive = amount >= 0;
+          return {
+            id: tx.id,
+            type: tx.type || tx.description || 'Transaction',
+            stamp: tx.created_at
+              ? new Date(tx.created_at).toLocaleString('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                })
+              : tx.date || '',
+            amount,
+            status: tx.status || 'Pending',
+            category: tx.category || (amountIsPositive ? 'deposit' : 'spending'),
+            label: amountIsPositive ? 'Deposit' : 'Spending',
+          };
+        }));
+      } catch (error) {
+        console.error('Failed to load transactions', error);
+      }
+    };
+
+    fetchTransactions();
+  }, [isOpen, activeProfile?.id]);
+
+  useEffect(() => {
+    if (!depositData) {
+      setTimeLeft(0);
+      setTimeRemaining(600);
+      setDepositAddress('');
+      setIsLocked(false);
+      return;
     }
-    return () => { if (clockInterval) clearInterval(clockInterval); };
-  }, [isOpen, isLocked, timeRemaining]);
+
+    setDepositAddress(depositData.wallet_address);
+    setIsLocked(true);
+
+    const updateCountdown = () => {
+      const expiresAt = new Date(depositData.expires_at).getTime();
+      const secondsLeft = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setTimeLeft(secondsLeft);
+      setTimeRemaining(secondsLeft > 0 ? secondsLeft : 0);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [depositData]);
 
   // ---------------------------------------------------------------------------
   // INTERACTION HANDLERS
   // ---------------------------------------------------------------------------
   if (!isOpen) return null;
 
-  const handleGenerateAddress = () => {
+  const handleGenerateAddress = async () => {
     AudioEngine.playClick();
-    const currentMinuteDigit = new Date().getMinutes() % 10;
-    setDepositAddress(staticDepositAddresses[currentMinuteDigit]);
-    setTimeRemaining(600);
-    setIsLocked(true);
+    if (!activeProfile?.id) return;
+
+    try {
+      const data = await SupabaseService.generateDepositAddress(activeProfile.id);
+      setDepositData(data);
+    } catch (error) {
+      console.error('Unable to generate deposit address', error);
+    }
   };
 
   const handleCopyAddress = () => {
@@ -141,8 +182,8 @@ export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpd
   };
 
   const getFilteredHistory = () => {
-    if (historyFilter === 'all') return historyLogs;
-    return historyLogs.filter(log => log.category === historyFilter);
+    if (historyFilter === 'all') return transactions;
+    return transactions.filter(log => log.category === historyFilter);
   };
 
   const getTransactionIcon = (type, category) => {
@@ -150,6 +191,20 @@ export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpd
     if (type === 'Reward Credit') return <Gift className="w-5 h-5 text-purple-500" />;
     if (category === 'deposit') return <ArrowDownToLine className="w-5 h-5 text-emerald-500" />;
     return <History className="w-5 h-5 text-slate-500" />;
+  };
+
+  const getStatusClasses = (status) => {
+    const normalized = String(status || '').toLowerCase();
+    if (['completed', 'confirmed', 'success', 'settled', 'paid'].includes(normalized)) {
+      return 'text-emerald-600 bg-emerald-50';
+    }
+    if (['pending', 'processing', 'review', 'in progress'].includes(normalized)) {
+      return 'text-amber-600 bg-amber-50';
+    }
+    if (['failed', 'cancelled', 'rejected', 'expired'].includes(normalized)) {
+      return 'text-rose-600 bg-rose-50';
+    }
+    return 'text-slate-600 bg-slate-100';
   };
 
   // Calculate percentage for the progress bar (600 seconds = 100%)
@@ -204,7 +259,7 @@ export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpd
             </p>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tighter">
-                {userProfile?.ar_balance?.toFixed(2) || '0.00'}
+                {Number(activeProfile?.ar_balance ?? 0).toFixed(2)}
               </span>
               <span className="text-lg font-bold text-blue-600">AR</span>
             </div>
@@ -307,7 +362,7 @@ export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpd
                     
                     <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 p-3 rounded-xl">
                       <span className="text-sm font-mono font-bold text-slate-900 break-all select-all">
-                        {depositAddress}
+                        {depositData?.wallet_address || depositAddress}
                       </span>
                       <button 
                         onClick={handleCopyAddress} 
@@ -416,7 +471,7 @@ export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpd
                   </div>
                 ) : (
                   getFilteredHistory().map((log) => {
-                    const isPositive = log.amount > 0;
+                    const isPositive = log.amount >= 0;
                     return (
                       <div 
                         key={log.id} 
@@ -434,9 +489,16 @@ export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpd
                           <p className="text-sm font-bold text-slate-900 truncate group-hover:text-blue-600 transition-colors">
                             {log.type}
                           </p>
-                          <p className="text-xs font-medium text-slate-500 mt-0.5 truncate">
-                            {log.stamp}
-                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                              isPositive ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {log.label}
+                            </span>
+                            <p className="text-xs font-medium text-slate-500 truncate">
+                              {log.stamp}
+                            </p>
+                          </div>
                         </div>
 
                         {/* Amount & Status */}
@@ -444,11 +506,9 @@ export default function WalletModal({ isOpen, onClose, userProfile, onBalanceUpd
                           <p className={`text-base font-black tracking-tight ${
                             isPositive ? 'text-emerald-600' : 'text-slate-900'
                           }`}>
-                            {isPositive ? '+' : ''}{log.amount.toFixed(2)}
+                            {isPositive ? '+' : ''}{Number(log.amount).toFixed(2)}
                           </p>
-                          <p className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${
-                            log.status === 'Completed' ? 'text-emerald-500' : 'text-amber-500'
-                          }`}>
+                          <p className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 px-2 py-0.5 rounded-full inline-block ${getStatusClasses(log.status)}`}>
                             {log.status}
                           </p>
                         </div>

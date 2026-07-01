@@ -15,8 +15,9 @@ import {
   AlertCircle,
   X
 } from 'lucide-react';
-import { MockAPI } from '../services/MockApi.js';
+import { SupabaseService } from '../services/SupabaseService.js';
 import { AudioEngine } from '../services/AudioEngine.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function MyTicketsView({ onTabChange, onSelectRaffle }) {
   // ---------------------------------------------------------------------------
@@ -30,6 +31,7 @@ export default function MyTicketsView({ onTabChange, onSelectRaffle }) {
   const [expandedTicketId, setExpandedTicketId] = useState(null); 
   const [activeTab, setActiveTab] = useState('active'); 
   const [searchQuery, setSearchQuery] = useState('');
+  const auth = useAuth();
 
   // ---------------------------------------------------------------------------
   // 2. INITIALIZATION & DATA FETCHING
@@ -40,13 +42,35 @@ export default function MyTicketsView({ onTabChange, onSelectRaffle }) {
     async function fetchTicketData() {
       try {
         setIsLoading(true);
-        const [ticketData, raffleData] = await Promise.all([
-          MockAPI.getUserTickets(),
-          MockAPI.getRaffles()
-        ]);
+        const { userProfile } = auth;
+        if (!userProfile || !userProfile.id) {
+          setTickets([]);
+          setRaffles([]);
+          return;
+        }
+
+        const my = await SupabaseService.getMyTickets(userProfile.id);
+        // my => { active: [...], past: [...] }
+        const activeEntries = my.active || [];
+        const pastEntries = my.past || [];
+
+        // normalize to shape expected by UI
+        const normalize = (e) => ({
+          id: e.id,
+          raffle_id: e.raffle_id,
+          quantity_bought: Number(e.qty || e.quantity || e.quantity_bought || 0),
+          ticket_numbers: e.ticket_numbers || [],
+          purchased_at: e.created_at || e.purchased_at || Date.now(),
+          associatedPool: e.raffle || null
+        });
+
+        const activeMapped = activeEntries.map(normalize);
+        const pastMapped = pastEntries.map(normalize);
+
+        const ticketData = [...activeMapped, ...pastMapped];
+        const raffleData = Array.from(new Map(ticketData.map(t => [t.associatedPool?.id, t.associatedPool])).values()).filter(Boolean);
         
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
+        await new Promise(resolve => setTimeout(resolve, 200));
         if (isMounted) {
           setTickets(ticketData);
           setRaffles(raffleData);
@@ -112,14 +136,22 @@ export default function MyTicketsView({ onTabChange, onSelectRaffle }) {
     return tickets.map(batch => {
       const associatedPool = raffles.find((r) => r.id === batch.raffle_id);
       const horizontalEPID = `EPID-2026-${String(batch.id).substring(0, 4).toUpperCase()}`;
-      
+
+      // Win probability: (qty / total_tickets) * 100
       let winProbabilityRatio = '0.00';
-      if (associatedPool && associatedPool.tickets_sold > 0) {
-        const ratio = (batch.quantity_bought / associatedPool.tickets_sold) * 100;
+      const totalTickets = Number(associatedPool?.total_tickets || associatedPool?.tickets_total || 0);
+      if (associatedPool && totalTickets > 0) {
+        const ratio = (batch.quantity_bought / totalTickets) * 100;
         winProbabilityRatio = ratio.toFixed(2);
       }
 
-      const statusLabel = activeTab === 'active' ? 'Drawing Soon' : 'Draw Completed';
+      const statusLabel = (associatedPool && associatedPool.status === 'active') ? 'Drawing Soon' : 'Draw Completed';
+
+      const ticketPrice = Number(associatedPool?.ticket_price || associatedPool?.price || 1);
+      const totalSpent = (batch.quantity_bought * ticketPrice) || 0;
+      const drawTarget = associatedPool && (associatedPool.end_time || associatedPool.draw_time || associatedPool.target_time)
+        ? new Date(associatedPool.end_time || associatedPool.draw_time || associatedPool.target_time).toLocaleString()
+        : 'Processing';
 
       return {
         ...batch,
@@ -127,7 +159,9 @@ export default function MyTicketsView({ onTabChange, onSelectRaffle }) {
         horizontalEPID,
         winProbabilityRatio,
         statusLabel,
-        isPast: activeTab === 'past'
+        isPast: !(associatedPool && associatedPool.status === 'active'),
+        totalSpent,
+        drawTarget
       };
     }).filter(ticket => {
       if (searchQuery) {
@@ -136,13 +170,16 @@ export default function MyTicketsView({ onTabChange, onSelectRaffle }) {
         const epidMatch = ticket.horizontalEPID.toLowerCase().includes(query);
         return titleMatch || epidMatch;
       }
+      // filter by active/past tabs
+      if (activeTab === 'active') return ticket.associatedPool && ticket.associatedPool.status === 'active';
+      if (activeTab === 'past') return !ticket.associatedPool || ticket.associatedPool.status !== 'active';
       return true;
     });
   };
 
   const displayedTickets = processTicketsPipeline();
-  const totalActiveTickets = tickets.reduce((acc, curr) => acc + curr.quantity_bought, 0);
-  const uniqueDrawsEntered = new Set(tickets.map(t => t.raffle_id)).size;
+  const totalEntries = tickets.reduce((acc, curr) => acc + (curr.quantity_bought || 0), 0);
+  const uniqueDrawsEntered = new Set(tickets.filter(t => t.associatedPool && t.associatedPool.status === 'active').map(t => t.raffle_id)).size;
 
   // ---------------------------------------------------------------------------
   // 5. RENDER: LOADING SKELETON
@@ -191,7 +228,7 @@ export default function MyTicketsView({ onTabChange, onSelectRaffle }) {
           </div>
           <div>
             <p className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider">Total Entries</p>
-            <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-0.5">{totalActiveTickets}</p>
+            <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-0.5">{totalEntries}</p>
           </div>
         </div>
         
@@ -317,7 +354,7 @@ export default function MyTicketsView({ onTabChange, onSelectRaffle }) {
                     <div className="flex items-center justify-between text-xs font-medium text-slate-500 pr-2">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-4 h-4 text-slate-400" />
-                        <span>Draw Target: Processing</span>
+                        <span>Draw Target: {ticketData.drawTarget}</span>
                       </div>
                     </div>
                   </div>
@@ -395,7 +432,7 @@ export default function MyTicketsView({ onTabChange, onSelectRaffle }) {
                           <ShoppingBag className="w-3.5 h-3.5" /> Total Value Spent
                         </span>
                         <span className="text-sm font-bold text-slate-900 block font-mono">
-                          {(ticketData.quantity_bought * 1.00).toFixed(2)} AR
+                          {(ticketData.totalSpent || 0).toFixed(2)} AR
                         </span>
                       </div>
 

@@ -1,27 +1,54 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, Bell, CheckCircle2, Award, Trophy, ShieldAlert, Gift
 } from 'lucide-react';
 import { AudioEngine } from '../../services/AudioEngine.js';
+import { SupabaseService } from '../../services/SupabaseService.js';
 
-export default function NotificationCenter({ navigateTo }) {
+export default function NotificationCenter({ navigateTo, userProfile, onRefresh }) {
   const [filter, setFilter] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [notifications, setNotifications] = useState([
-    { id: 1, category: 'System', title: "Welcome to AnonRoom 2.0!", message: "We've completely overhauled the UI for a smoother, premium experience. Explore the new task center and automated rewards system today.", time: "Just now", isRead: false },
-    { id: 2, category: 'Task', title: "Task Approved Successfully", message: "Great job! Your screenshot proof for the Partner App download task has been verified. 50 Reward Points have been instantly credited to your balance.", time: "2 hours ago", isRead: false },
-    { id: 3, category: 'Raffle', title: "Raffle Tickets Confirmed", message: "Your purchase of 5 tickets for the 'PlayStation 5 Console' raffle was successful. Your unique EPID ticket numbers are securely recorded on the ledger.", time: "1 day ago", isRead: true },
-    { id: 4, category: 'Security', title: "New Device Login Detected", message: "A new login was detected from Chrome on Windows (IP: 192.168.1.1). If this was you, you can safely ignore this message. If not, please change your password immediately.", time: "3 days ago", isRead: true },
-    { id: 5, category: 'Reward', title: "Coupon Expiring Soon", message: "Your 'Welcome Cashback' coupon is expiring in 48 hours. Don't forget to visit the Reward Center to activate it before it's gone!", time: "4 days ago", isRead: true }
-  ]);
+  useEffect(() => {
+    const loadNotifications = async () => {
+      if (!userProfile?.id) return;
+      try {
+        setLoading(true);
+        const { unread, read } = await SupabaseService.getNotifications(userProfile.id);
+        const mapped = [...unread, ...read].map((n) => ({
+          ...n,
+          category: n.category || 'System',
+          title: n.title || 'Notification',
+          message: n.message || n.body || '',
+          time: n.created_at ? new Date(n.created_at).toLocaleString() : 'Recently updated',
+          isRead: !!(n.is_read || n.read_at)
+        }));
+        setNotifications(mapped);
+      } catch (err) {
+        console.error('Failed to load notifications:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadNotifications();
+  }, [userProfile?.id]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
   const displayed = filter === 'unread' ? notifications.filter(n => !n.isRead) : notifications;
 
-  const handleMarkAllRead = () => {
+  const handleMarkAllRead = async () => {
     AudioEngine.playClick();
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    if (!userProfile?.id) return;
+    try {
+      await SupabaseService.markNotificationsAsRead(userProfile.id, notifications.filter((n) => !n.isRead).map((n) => n.id));
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      onRefresh?.();
+    } catch (err) {
+      console.error('Failed to mark notifications as read:', err);
+    }
   };
 
   const toggleExpand = (id) => {
@@ -59,7 +86,14 @@ export default function NotificationCenter({ navigateTo }) {
       </div>
 
       <div className="card-standard bg-white overflow-hidden shadow-sm border border-slate-100 rounded-[1.5rem]">
-        {displayed.length === 0 ? (
+        {loading ? (
+          <div className="py-20 flex flex-col items-center justify-center text-center">
+            <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-5 shadow-inner border border-slate-100">
+              <Bell className="w-10 h-10 text-slate-300" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">Loading notifications…</h3>
+          </div>
+        ) : displayed.length === 0 ? (
           <div className="py-20 flex flex-col items-center justify-center text-center">
             <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-5 shadow-inner border border-slate-100">
               <Bell className="w-10 h-10 text-slate-300" />

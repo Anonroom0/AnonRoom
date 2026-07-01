@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AudioEngine } from '../services/AudioEngine.js';
+import { SupabaseService } from '../services/SupabaseService.js';
 
 // Modular View Imports
 import ProfileMenu from './Profile/ProfileMenu';
@@ -23,6 +24,7 @@ export default function ProfileView({ userProfile, onOpenWallet, initialPage = '
   // ROUTING STATE
   const [activePage, setActivePage] = useState(initialPage);
   const [activeDocument, setActiveDocument] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // 🔥 THE DEEP-LINK FIX: 
   // Forces the Profile router to switch pages if App.jsx sends a new initialPage
@@ -43,35 +45,52 @@ export default function ProfileView({ userProfile, onOpenWallet, initialPage = '
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const refreshProfile = () => setRefreshKey((prev) => prev + 1);
+
+  useEffect(() => {
+    const refreshOnAuth = async () => {
+      if (!userProfile?.id) return;
+      try {
+        const freshProfile = await SupabaseService.getUserProfile(userProfile.id);
+        if (freshProfile) {
+          window.__PROFILE_REFRESH__?.(freshProfile);
+        }
+      } catch (err) {
+        console.error('Profile refresh failed:', err);
+      }
+    };
+    refreshOnAuth();
+  }, [userProfile?.id, refreshKey]);
+
   // RENDER ROUTER
   return (
     <div className="w-full relative min-h-screen">
       {activePage === 'menu' && (
-        <ProfileMenu navigateTo={navigateTo} userProfile={userProfile} onSignOut={onSignOut} />
+        <ProfileMenu navigateTo={navigateTo} userProfile={userProfile} onSignOut={onSignOut} refreshSignal={refreshKey} />
       )}
       
       {activePage === 'tasks' && (
-        <TaskCenter navigateTo={navigateTo} />
+        <TaskCenter navigateTo={navigateTo} userProfile={userProfile} onRefresh={refreshProfile} />
       )}
       
       {activePage === 'rewards' && (
-        <RewardCenter navigateTo={navigateTo} />
+        <RewardCenter navigateTo={navigateTo} userProfile={userProfile} onRefresh={refreshProfile} />
       )}
       
       {activePage === 'winnings' && (
-        <WinningsManager navigateTo={navigateTo} />
+        <WinningsManager navigateTo={navigateTo} userProfile={userProfile} onRefresh={refreshProfile} />
       )}
       
       {activePage === 'shipments' && (
-        <ShipmentTracker navigateTo={navigateTo} />
+        <ShipmentTracker navigateTo={navigateTo} userProfile={userProfile} />
       )}
       
       {activePage === 'referrals' && (
-        <ReferralHub navigateTo={navigateTo} />
+        <ReferralHub navigateTo={navigateTo} userProfile={userProfile} />
       )}
       
       {activePage === 'notifications' && (
-        <NotificationCenter navigateTo={navigateTo} />
+        <NotificationCenter navigateTo={navigateTo} userProfile={userProfile} onRefresh={refreshProfile} />
       )}
       
       {activePage === 'faqs' && (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, 
   Trophy, 
@@ -14,6 +14,7 @@ import {
   Info
 } from 'lucide-react';
 import { AudioEngine } from '../../services/AudioEngine.js';
+import { SupabaseService } from '../../services/SupabaseService.js';
 
 /**
  * WinningsManager Component
@@ -22,7 +23,7 @@ import { AudioEngine } from '../../services/AudioEngine.js';
  * Uses isolated local state to manage the shipping form and claim success screens,
  * completely preventing global state crashes.
  */
-export default function WinningsManager({ navigateTo }) {
+export default function WinningsManager({ navigateTo, userProfile, onRefresh }) {
   // ---------------------------------------------------------------------------
   // 1. INTERNAL SUB-ROUTING & STATE
   // ---------------------------------------------------------------------------
@@ -38,10 +39,39 @@ export default function WinningsManager({ navigateTo }) {
   // Status tracking for the currently selected item
   const [isSubmitted, setIsSubmitted] = useState(false);
 
+  const [myWinnings, setMyWinnings] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadWinnings = async () => {
+      if (!userProfile?.id) return;
+      try {
+        setLoading(true);
+        const data = await SupabaseService.getWinnings(userProfile.id);
+        const normalized = (data || []).map((item) => ({
+          id: item.id,
+          title: item.title || item.name || 'Prize',
+          type: item.type || (item.product_id ? 'physical' : 'digital'),
+          ticketId: item.ticket_id || item.id,
+          wonOn: item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recently received',
+          image: item.image || 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?q=80&w=1000&auto=format&fit=crop',
+          status: item.status === 'claimed' || item.status === 'claim processed' ? 'claimed' : 'pending'
+        }));
+        setMyWinnings(normalized);
+      } catch (err) {
+        console.error('Failed to load winnings:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadWinnings();
+  }, [userProfile?.id]);
+
   // ---------------------------------------------------------------------------
   // 2. MOCK WINNINGS REGISTRY
   // ---------------------------------------------------------------------------
-  const [myWinnings, setMyWinnings] = useState([
+  const [myWinningsSeed, setMyWinningsSeed] = useState([
     { 
       id: 'win-1', 
       title: 'Sony PlayStation 5 Pro Edition', 
@@ -101,14 +131,20 @@ export default function WinningsManager({ navigateTo }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDigitalClaim = () => {
+  const handleDigitalClaim = async () => {
     AudioEngine.playClick();
-    // Safely update local list
-    setMyWinnings(prev => prev.map(p => p.id === selectedPrize.id ? { ...p, status: 'claimed' } : p));
-    setIsSubmitted(true);
+    if (!selectedPrize?.id) return;
+    try {
+      await SupabaseService.claimDigitalWinning(selectedPrize.id);
+      setMyWinnings(prev => prev.map(p => p.id === selectedPrize.id ? { ...p, status: 'claimed' } : p));
+      setIsSubmitted(true);
+      onRefresh?.();
+    } catch (err) {
+      console.error('Failed to claim digital prize:', err);
+    }
   };
 
-  const handlePhysicalSubmit = (e) => {
+  const handlePhysicalSubmit = async (e) => {
     e.preventDefault();
     if (!shippingName || !shippingPhone || !shippingAddress) return;
     
@@ -142,7 +178,12 @@ export default function WinningsManager({ navigateTo }) {
           </div>
         </div>
 
-        {myWinnings.length === 0 ? (
+        {loading ? (
+          <div className="card-standard py-20 flex flex-col items-center justify-center text-center bg-white shadow-sm border border-slate-100">
+            <Trophy className="w-10 h-10 text-slate-300" />
+            <h3 className="text-lg font-bold text-slate-700 mt-4">Loading winnings…</h3>
+          </div>
+        ) : myWinnings.length === 0 ? (
           <div className="card-standard py-20 flex flex-col items-center justify-center text-center bg-white shadow-sm border border-slate-100">
             <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center shadow-inner border border-slate-100 mb-4">
               <Trophy className="w-10 h-10 text-slate-300" />

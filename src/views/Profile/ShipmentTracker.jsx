@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, 
   Package, 
@@ -9,6 +9,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { AudioEngine } from '../../services/AudioEngine.js';
+import { SupabaseService } from '../../services/SupabaseService.js';
 
 /**
  * ShipmentTracker Component
@@ -16,8 +17,27 @@ import { AudioEngine } from '../../services/AudioEngine.js';
  * Displays physical prize delivery progress. Features a vertical timeline,
  * status progress bars, and localized mock tracking data for high realism.
  */
-export default function ShipmentTracker({ navigateTo }) {
-  
+export default function ShipmentTracker({ navigateTo, userProfile }) {
+  const [shipments, setShipments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadShipments = async () => {
+      if (!userProfile?.id) return;
+      try {
+        setLoading(true);
+        const data = await SupabaseService.getShipments(userProfile.id);
+        setShipments(data || []);
+      } catch (err) {
+        console.error('Failed to load shipments:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadShipments();
+  }, [userProfile?.id]);
+
   // High-fidelity mock tracking data
   const mockShipments = [
     { 
@@ -68,7 +88,9 @@ export default function ShipmentTracker({ navigateTo }) {
       </div>
 
       <div className="space-y-8">
-        {mockShipments.map((shipment) => (
+        {loading ? (
+          <div className="card-standard bg-white p-8 text-center text-sm font-medium text-slate-500 border border-slate-100">Loading shipments…</div>
+        ) : (shipments.length ? shipments : mockShipments).map((shipment) => (
           <div key={shipment.id} className="card-standard bg-white overflow-hidden shadow-sm border border-slate-100 transition-shadow hover:shadow-md rounded-[1.5rem]">
             
             {/* Shipment Header Block */}

@@ -12,16 +12,21 @@ import {
   Clock,
   CheckCircle2
 } from 'lucide-react';
-import { MockAPI } from '../services/MockApi.js';
 import { AudioEngine } from '../services/AudioEngine.js';
+import { SupabaseService } from '../services/SupabaseService.js';
+import { useAuth } from '../context/AuthContext.jsx';
+
 export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, userProfile }) {
 
 // ---------------------------------------------------------------------------
   // STATE MANAGEMENT
   // ---------------------------------------------------------------------------
   const [ticketCount, setTicketCount] = useState(0);
-  const [raffles, setRaffles] = useState([]);
+  const [couponCount, setCouponCount] = useState(0);
+  const [liveRaffles, setLiveRaffles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { userProfile: authUserProfile } = useAuth();
+  const activeUserProfile = userProfile || authUserProfile;
 
   // Carousel & Touch States
   const [activeBanner, setActiveBanner] = useState(0);
@@ -79,31 +84,62 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
   // INITIALIZATION
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchHomeData() {
       try {
-        const [purchasedTickets, liveRaffles] = await Promise.all([
-          MockAPI.getUserTickets(),
-          MockAPI.getRaffles()
-        ]);
-        
-        // Calculate total tickets owned by user
-        const totalTickets = purchasedTickets.reduce((sum, item) => sum + item.quantity_bought, 0);
-        setTicketCount(totalTickets);
-        setRaffles(liveRaffles);
+        if (!activeUserProfile?.id) {
+          if (isMounted) {
+            setTicketCount(0);
+            setLiveRaffles([]);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        const { ticketCount: fetchedTicketCount, couponCount: fetchedCouponCount, liveRaffles: fetchedLiveRaffles } =
+          await SupabaseService.getHomeStats(activeUserProfile.id);
+
+        if (isMounted) {
+          setTicketCount(fetchedTicketCount || 0);
+          setCouponCount(fetchedCouponCount || 0);
+          setLiveRaffles(
+            (fetchedLiveRaffles || []).map((raffle) => ({
+              ...raffle,
+              title: raffle.name || raffle.title || 'Untitled raffle',
+              image: raffle.image_url || raffle.image || '',
+              image_url: raffle.image_url || raffle.image || '',
+              tickets_sold: raffle.sold_tickets ?? raffle.tickets_sold ?? 0,
+              total_tickets: raffle.total_tickets ?? raffle.max_tickets ?? 0,
+              ticket_price: raffle.ticket_price ?? raffle.price_per_ticket ?? 1,
+            }))
+          );
+        }
       } catch (err) {
-        console.error("Error loading home dashboard:", err);
+        console.error('Error loading home dashboard:', err);
+        if (isMounted) {
+          setTicketCount(0);
+          setLiveRaffles([]);
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
+
     fetchHomeData();
 
     // Auto-advance banner every 5 seconds
     const interval = setInterval(() => {
       setActiveBanner((current) => (current + 1) % promoBanners.length);
     }, 5000);
-    return () => clearInterval(interval);
-  }, [promoBanners.length]);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [activeUserProfile?.id, promoBanners.length]);
 
   // ---------------------------------------------------------------------------
   // TOUCH GESTURE LOGIC FOR CAROUSEL
@@ -273,7 +309,7 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
             <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110">
               <Gift className="w-5 h-5" />
             </div>
-            <span className="text-2xl font-black text-slate-900">120</span>
+            <span className="text-2xl font-black text-slate-900">{couponCount}</span>
           </div>
           <div>
             <h3 className="text-sm font-bold text-slate-900">Reward Points</h3>
@@ -303,13 +339,13 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
 
         {/* Horizontal Scroll Track */}
         <div className="w-full flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x snap-mandatory">
-          {raffles.map((raffle) => {
-            // Calculate progress for standard UI
-            const percentSold = Math.round((raffle.tickets_sold / raffle.total_tickets) * 100);
+          {liveRaffles.map((raffle) => {
+            const soldTickets = raffle.sold_tickets ?? raffle.tickets_sold ?? 0;
+            const totalTickets = raffle.total_tickets ?? 1;
+            const percentSold = Math.round((soldTickets / totalTickets) * 100);
+            const ticketPrice = raffle.ticket_price ?? 1;
             
             return (
-              // Inside your raffles.map loop:
-
               <div 
                 key={raffle.id}
                 className="min-w-[240px] w-[240px] bg-white border border-slate-100 rounded-[1.25rem] overflow-hidden shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] snap-start shrink-0 flex flex-col group cursor-pointer transition-all hover:shadow-[0_8px_24px_-4px_rgba(0,0,0,0.08)]"
@@ -318,13 +354,13 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
                 {/* Image Header Area */}
                 <div className="w-full h-32 bg-slate-100 relative overflow-hidden">
                   <img 
-                    src={raffle.image} 
+                    src={raffle.image_url || raffle.image || ''} 
                     alt={raffle.title} 
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-60" />
                   <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm text-slate-900 text-[10px] font-bold px-2 py-1 rounded-md shadow-sm">
-                    1 AR / Ticket
+                    {ticketPrice} AR / Ticket
                   </div>
                 </div>
 
@@ -338,8 +374,8 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
                     {/* Standard Modern Progress Bar */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                        <span>{raffle.tickets_sold} Sold</span>
-                        <span>{raffle.total_tickets} Total</span>
+                        <span>{soldTickets} Sold</span>
+                        <span>{totalTickets} Total</span>
                       </div>
                       <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                         <div 
@@ -358,7 +394,6 @@ export default function HomeView({ onTabChange, onSelectRaffle, onDeepLink, user
                   </div>
                 </div>
               </div>
-
             );
           })}
         </div>

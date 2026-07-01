@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, 
   Award, 
@@ -17,6 +17,7 @@ import {
   Info // 🐛 FIX: Added the missing Info icon import here!
 } from 'lucide-react';
 import { AudioEngine } from '../../services/AudioEngine.js';
+import { SupabaseService } from '../../services/SupabaseService.js';
 
 /**
  * TaskCenter Component
@@ -25,7 +26,7 @@ import { AudioEngine } from '../../services/AudioEngine.js';
  * proof for promotional tasks. Uses an internal sub-router to manage the 
  * multi-step submission flow without polluting the global application state.
  */
-export default function TaskCenter({ navigateTo }) {
+export default function TaskCenter({ navigateTo, userProfile, onRefresh }) {
   // ---------------------------------------------------------------------------
   // 1. INTERNAL SUB-ROUTING & STATE
   // ---------------------------------------------------------------------------
@@ -38,13 +39,31 @@ export default function TaskCenter({ navigateTo }) {
   const [proofText, setProofText] = useState('');
   const [proofImage, setProofImage] = useState(false);
   
-  // Registry of completed tasks (In a real app, this comes from the backend)
-  const [completedTasks, setCompletedTasks] = useState([]);
+  const [availableTasks, setAvailableTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const loadTasks = async () => {
+      if (!userProfile?.id) return;
+      try {
+        setLoading(true);
+        const tasks = await SupabaseService.getTasks(userProfile.id);
+        setAvailableTasks(tasks || []);
+      } catch (err) {
+        console.error('Failed to load tasks:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTasks();
+  }, [userProfile?.id]);
 
   // ---------------------------------------------------------------------------
-  // 2. MOCK TASK REGISTRY
+  // 2. TASK REGISTRY
   // ---------------------------------------------------------------------------
-  const availableTasks = [
+  const taskRegistry = [
     {
       id: 'task-101',
       title: 'Partner App Registration',
@@ -108,12 +127,11 @@ export default function TaskCenter({ navigateTo }) {
   };
 
   const handleTaskSelect = (task) => {
-    if (task.isLocked) return;
+    if (task.locked) return;
     AudioEngine.playClick();
     setSelectedTask(task);
     
-    // Check if it's already completed
-    if (completedTasks.includes(task.id)) {
+    if (task.completed) {
       setCurrentView('success');
     } else {
       setCurrentView('detail');
@@ -129,22 +147,27 @@ export default function TaskCenter({ navigateTo }) {
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const handleSubmitProof = (e) => {
+  const handleSubmitProof = async (e) => {
     e.preventDefault();
-    if (!proofText || !proofImage) return;
-    
+    if (!proofText || !proofImage || !selectedTask || !userProfile?.id) return;
+
     AudioEngine.playClick();
-    
-    // Mark task as completed in our local array
-    setCompletedTasks(prev => [...prev, selectedTask.id]);
-    
-    // Reset form fields
-    setProofText('');
-    setProofImage(false);
-    
-    // Advance to success view
-    setCurrentView('success');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setSubmitting(true);
+
+    try {
+      await SupabaseService.submitPartnerTask(userProfile.id, selectedTask.id, proofText, proofImage);
+      const tasks = await SupabaseService.getTasks(userProfile.id);
+      setAvailableTasks(tasks || []);
+      setProofText('');
+      setProofImage(false);
+      setCurrentView('success');
+      onRefresh?.();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      console.error('Failed to submit task proof:', err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -189,9 +212,11 @@ export default function TaskCenter({ navigateTo }) {
         <div className="space-y-4">
           <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest pl-2">Current Bounties</h3>
           
-          {availableTasks.map(task => {
-            const isCompleted = completedTasks.includes(task.id);
-            const isLocked = task.isLocked && !isCompleted;
+          {loading ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm font-medium text-slate-500">Loading tasks…</div>
+          ) : availableTasks.map(task => {
+            const isCompleted = !!task.completed;
+            const isLocked = !!task.locked && !isCompleted;
 
             return (
               <div 
@@ -437,13 +462,14 @@ export default function TaskCenter({ navigateTo }) {
               <div className="pt-6 border-t border-slate-100">
                 <button 
                   type="submit" 
+                  disabled={submitting || !proofText || !proofImage}
                   className={`w-full py-4 text-base font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
-                    proofText && proofImage 
+                    proofText && proofImage && !submitting
                       ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 shadow-indigo-600/25 border border-indigo-700'
                       : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   }`}
                 >
-                  <Send className="w-5 h-5" /> Submit for Verification
+                  <Send className="w-5 h-5" /> {submitting ? 'Submitting…' : 'Submit for Verification'}
                 </button>
               </div>
             </form>

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Award, Users, Trophy, Gift, Bell, ChevronRight, Mail, Phone, 
   Package, FileText, FileCheck, HelpCircle, ShieldCheck, LogOut,
   Shield, Activity, TrendingUp, Hexagon
 } from 'lucide-react';
 import { AudioEngine } from '../../services/AudioEngine.js';
+import { SupabaseService } from '../../services/SupabaseService.js';
 
 /**
  * ProfileMenu Component
@@ -13,7 +14,7 @@ import { AudioEngine } from '../../services/AudioEngine.js';
  * Features a dynamic overlapping header, beautifully aligned flex-avatar layout,
  * and high-fidelity hover interactions for all menu items.
  */
-export default function ProfileMenu({ navigateTo, userProfile, onSignOut }) {
+export default function ProfileMenu({ navigateTo, userProfile, onSignOut, refreshSignal }) {
   
   const handleSignOut = async () => {
     AudioEngine.playClick();
@@ -30,8 +31,21 @@ export default function ProfileMenu({ navigateTo, userProfile, onSignOut }) {
   const displayPhone = userProfile?.mobile || '+91 98765 43210';
   const avatarInitial = displayName.substring(0, 2).toUpperCase();
 
-  // Mock Notification count for the red badge
-  const unreadNotifications = 2; 
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  useEffect(() => {
+    const loadUnread = async () => {
+      if (!userProfile?.id) return;
+      try {
+        const { unread } = await SupabaseService.getNotifications(userProfile.id);
+        setUnreadNotifications(unread?.length || 0);
+      } catch (err) {
+        console.error('Failed to load unread notifications:', err);
+      }
+    };
+
+    loadUnread();
+  }, [userProfile?.id, refreshSignal]);
 
   return (
     <div className="w-full max-w-3xl mx-auto space-y-8 animate-fade-in pb-16">

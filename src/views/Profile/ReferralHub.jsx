@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, Users, Link as LinkIcon, Copy, CheckCircle2, 
   UserCircle, Trophy, Wallet, Activity, Gift, ChevronDown, 
@@ -6,6 +6,7 @@ import {
   Check
 } from 'lucide-react';
 import { AudioEngine } from '../../services/AudioEngine.js';
+import { SupabaseService } from '../../services/SupabaseService.js';
 
 /**
  * ReferralHub Component
@@ -14,7 +15,7 @@ import { AudioEngine } from '../../services/AudioEngine.js';
  * Includes cumulative financial metrics, milestone rewards, network expansion,
  * and competitive leaderboards with strict 30-day commission rule tracking.
  */
-export default function ReferralHub({ navigateTo }) {
+export default function ReferralHub({ navigateTo, userProfile }) {
   // ---------------------------------------------------------------------------
   // 1. COMPONENT STATE
   // ---------------------------------------------------------------------------
@@ -22,20 +23,36 @@ export default function ReferralHub({ navigateTo }) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [expandedFriendId, setExpandedFriendId] = useState(null);
   
-  // Milestone Claim Popup
   const [claimPopup, setClaimPopup] = useState({ show: false, reward: '' });
+  const [dashboardStats, setDashboardStats] = useState({ totalFriends: 0, activeCommissionFriends: 0, cumulativeDeposits: 0, totalCommission: 0 });
+  const [friends, setFriends] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // ---------------------------------------------------------------------------
-  // 2. MOCK DATA FACTORIES (AFFILIATE METRICS)
-  // ---------------------------------------------------------------------------
-  
-  // Dashboard Aggregated Metrics
-  const dashboardStats = {
-    totalFriends: 12,
-    activeCommissionFriends: 4,
-    cumulativeDeposits: 4500, // in USDT
-    totalCommission: 450,     // in USDT
-  };
+  useEffect(() => {
+    const loadReferralData = async () => {
+      if (!userProfile?.id) return;
+      try {
+        setLoading(true);
+        const [stats, referrals] = await Promise.all([
+          SupabaseService.getReferralStats(userProfile.id),
+          SupabaseService.getReferrals(userProfile.id)
+        ]);
+        setDashboardStats({
+          totalFriends: stats.networkCount || 0,
+          activeCommissionFriends: stats.activeCommunity || 0,
+          cumulativeDeposits: stats.friendDeposits || 0,
+          totalCommission: Math.round((stats.friendDeposits || 0) * 0.1 * 100) / 100
+        });
+        setFriends(referrals || []);
+      } catch (err) {
+        console.error('Failed to load referral data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadReferralData();
+  }, [userProfile?.id]);
 
   // Milestone Track Data
   const [milestones, setMilestones] = useState([
@@ -117,6 +134,9 @@ export default function ReferralHub({ navigateTo }) {
   // ---------------------------------------------------------------------------
   // 3. INTERACTION HANDLERS
   // ---------------------------------------------------------------------------
+
+  const referralLink = userProfile?.referral_link || `https://anonroom.com/ref/${userProfile?.username || 'user'}`;
+  const referralCode = userProfile?.referral_code || 'ANONROOM';
 
   const handleCopy = (text, type) => {
     navigator.clipboard.writeText(text);
@@ -202,10 +222,10 @@ export default function ReferralHub({ navigateTo }) {
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1 bg-black/20 border border-white/20 rounded-xl px-5 py-4 font-medium text-sm sm:text-base flex items-center gap-3 overflow-hidden shadow-inner backdrop-blur-sm">
                 <LinkIcon className="w-5 h-5 text-emerald-200 shrink-0" />
-                <span className="truncate w-full select-all">https://anonroom.com/ref/VAIBHAV26</span>
+                <span className="truncate w-full select-all">{referralLink}</span>
               </div>
               <button 
-                onClick={() => handleCopy("https://anonroom.com/ref/VAIBHAV26", 'link')} 
+                onClick={() => handleCopy(referralLink, 'link')} 
                 className="bg-white text-teal-800 px-8 py-4 rounded-xl font-bold shadow-lg shadow-black/10 hover:bg-slate-50 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
               >
                 {copiedLink ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
@@ -218,10 +238,10 @@ export default function ReferralHub({ navigateTo }) {
             <label className="text-xs font-bold text-emerald-100 uppercase tracking-widest">Manual Affiliate Code</label>
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1 bg-black/20 border border-white/20 rounded-xl px-5 py-4 font-mono font-bold text-xl tracking-widest select-all flex items-center shadow-inner backdrop-blur-sm">
-                VAIBHAV26
+                {referralCode}
               </div>
               <button 
-                onClick={() => handleCopy("VAIBHAV26", 'code')} 
+                onClick={() => handleCopy(referralCode, 'code')} 
                 className="bg-teal-800/80 backdrop-blur-md text-white border border-teal-400 px-8 py-4 rounded-xl font-bold hover:bg-teal-900 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0 shadow-md"
               >
                 {copiedCode ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
@@ -368,13 +388,15 @@ export default function ReferralHub({ navigateTo }) {
               <h3 className="font-bold text-slate-900 text-lg">My Network</h3>
             </div>
             <span className="text-xs font-bold text-slate-500 bg-white px-2.5 py-1 rounded-md shadow-sm border border-slate-200">
-              {mockFriends.length} Referrals
+              {friends.length} Referrals
             </span>
           </div>
           
           <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
             <div className="divide-y divide-slate-100">
-              {mockFriends.map((friend) => {
+              {loading ? (
+                <div className="p-6 text-sm text-slate-500">Loading network…</div>
+              ) : friends.map((friend) => {
                 const isExpanded = expandedFriendId === friend.id;
                 
                 return (
@@ -387,12 +409,12 @@ export default function ReferralHub({ navigateTo }) {
                     >
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-600 shadow-inner text-base shrink-0">
-                          {friend.name.charAt(0)}
+                          {(friend.name || friend.email || 'U').charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900 text-sm">{friend.name}</p>
+                          <p className="font-bold text-slate-900 text-sm">{friend.name || friend.email || 'Referral'}</p>
                           <p className="text-[11px] text-slate-500 font-medium mt-0.5 flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-slate-400" /> {friend.date}
+                            <Clock className="w-3 h-3 text-slate-400" /> {friend.dateLabel}
                           </p>
                         </div>
                       </div>
@@ -415,12 +437,12 @@ export default function ReferralHub({ navigateTo }) {
                           
                           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                             <span className="text-xs font-bold text-slate-500">Total Deposit Made</span>
-                            <span className="text-sm font-black text-slate-900">${friend.deposit.toLocaleString()}</span>
+                            <span className="text-sm font-black text-slate-900">${Number(friend.deposit || 0).toLocaleString()}</span>
                           </div>
                           
                           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                             <span className="text-xs font-bold text-slate-500">Commission Earned (10%)</span>
-                            <span className="text-sm font-black text-emerald-600">+${friend.commission.toLocaleString()}</span>
+                            <span className="text-sm font-black text-emerald-600">+${Number(friend.commission || 0).toLocaleString()}</span>
                           </div>
                           
                           <div className="flex items-center justify-between">

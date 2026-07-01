@@ -17,8 +17,9 @@ import {
   ArrowRight,
   Filter
 } from 'lucide-react';
-import { MockAPI } from '../services/MockApi.js';
 import { AudioEngine } from '../services/AudioEngine.js';
+import { SupabaseService } from '../services/SupabaseService.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function RaffleView({ targetRaffleId, clearTarget }) {
   // ---------------------------------------------------------------------------
@@ -30,6 +31,8 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
   // Detail View State
   const [selectedRaffle, setSelectedRaffle] = useState(null);
   const [activeSubTab, setActiveSubTab] = useState('buy'); // 'buy' | 'mytickets' | 'info' | 'leaderboard'
+  const auth = useAuth();
+  const [leaderboard, setLeaderboard] = useState([]);
   
   // Checkout State
   const [ticketQuantity, setTicketQuantity] = useState(1);
@@ -70,7 +73,7 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
   useEffect(() => {
     async function fetchRaffles() {
       try {
-        const data = await MockAPI.getRaffles();
+        const data = await SupabaseService.getRaffles();
         setRaffles(data);
         
         // Handle deep-linking from Home page
@@ -90,6 +93,26 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
     fetchRaffles();
   }, [targetRaffleId]);
 
+  // fetch raffle details / leaderboard when switching into leaderboard tab
+  useEffect(() => {
+    let mounted = true;
+    async function fetchDetails() {
+      if (!selectedRaffle) return;
+      if (activeSubTab === 'leaderboard') {
+        try {
+          const { leaderboard } = await SupabaseService.getRaffleDetails(selectedRaffle.id);
+          if (!mounted) return;
+          setSelectedRaffle((prev) => ({ ...prev }));
+          setLeaderboard(leaderboard || []);
+        } catch (err) {
+          console.error('Failed to load leaderboard', err);
+        }
+      }
+    }
+    fetchDetails();
+    return () => { mounted = false; };
+  }, [activeSubTab, selectedRaffle]);
+
   // ---------------------------------------------------------------------------
   // INTERACTION HANDLERS
   // ---------------------------------------------------------------------------
@@ -106,17 +129,32 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
     try {
       AudioEngine.playClick();
       setPurchaseStatus('processing');
-      
-      // Simulate network request delay for smooth UX
-      await new Promise(resolve => setTimeout(resolve, 1500)); 
-      await MockAPI.purchaseTickets(selectedRaffle.id, ticketQuantity);
-      
+      // call buy API
+      const { userProfile, setUserProfile } = auth;
+      if (!userProfile?.id) throw new Error('User not authenticated');
+
+      // simulate small delay for UX
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      await SupabaseService.buyRaffleTickets(userProfile.id, selectedRaffle.id, ticketQuantity, selectedRaffle.ticket_price || selectedRaffle.price || 1.0, 0);
+
+      // Refresh user profile balance and raffle counts
+      try {
+        const freshProfile = await SupabaseService.getUserProfile(userProfile.id);
+        setUserProfile && setUserProfile(freshProfile);
+      } catch (e) {
+        console.warn('Could not refresh profile', e);
+      }
+
+      try {
+        const refreshedList = await SupabaseService.getRaffles();
+        setRaffles(refreshedList);
+        setSelectedRaffle(refreshedList.find(r => r.id === selectedRaffle.id) || selectedRaffle);
+      } catch (e) {
+        console.warn('Could not refresh raffles', e);
+      }
+
       setPurchaseStatus('success');
-      
-      // Refresh the specific raffle data to update progress bar
-      const refreshedList = await MockAPI.getRaffles();
-      setRaffles(refreshedList);
-      setSelectedRaffle(refreshedList.find(r => r.id === selectedRaffle.id));
     } catch (err) {
       setPurchaseStatus('error');
     }
@@ -165,6 +203,7 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
   // RENDER: DEEP-DIVE RAFFLE DETAIL VIEW
   // ---------------------------------------------------------------------------
   if (selectedRaffle) {
+    const ticketPrice = selectedRaffle.ticket_price || selectedRaffle.price || 1.00;
     return (
       <div className="w-full max-w-3xl mx-auto animate-fade-in pb-12">
         
@@ -390,16 +429,16 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
                 <div className="space-y-3">
                   <h3 className="text-base font-bold text-slate-900">Draw Progress</h3>
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
-                    <div className="flex items-center justify-between text-sm font-bold text-slate-600">
-                      <span>{selectedRaffle.tickets_sold} Sold</span>
-                      <span>{selectedRaffle.total_tickets} Total</span>
-                    </div>
-                    <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-blue-500 rounded-full transition-all duration-1000"
-                        style={{ width: `${(selectedRaffle.tickets_sold / selectedRaffle.total_tickets) * 100}%` }}
-                      />
-                    </div>
+                        <div className="flex items-center justify-between text-sm font-bold text-slate-600">
+                          <span>{selectedRaffle.tickets_sold} Sold</span>
+                          <span>{selectedRaffle.total_tickets} Total</span>
+                        </div>
+                        <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-500 rounded-full transition-all duration-1000"
+                            style={{ width: `${(selectedRaffle.tickets_sold / (selectedRaffle.total_tickets || 1)) * 100}%` }}
+                          />
+                        </div>
                   </div>
                 </div>
 
@@ -456,8 +495,8 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
                 </div>
                 
                 <div className="divide-y divide-slate-100">
-                  {mockLeaderboard.map((user) => (
-                    <div key={user.rank} className="p-4 sm:p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+                  {(leaderboard && leaderboard.length ? leaderboard : mockLeaderboard).map((user, idx) => (
+                    <div key={user.user_id || idx} className="p-4 sm:p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
                       {/* Rank Indicator */}
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm shrink-0 ${
                         user.rank === 1 ? 'bg-amber-100 text-amber-600 shadow-sm' :
@@ -469,20 +508,20 @@ export default function RaffleView({ targetRaffleId, clearTarget }) {
                       </div>
 
                       {/* Avatar */}
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${user.color}`}>
-                        {user.avatar}
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 bg-slate-100 text-slate-700`}> 
+                        {user.profile?.name ? user.profile.name.split(' ').map(p=>p[0]).slice(0,2).join('') : (user.profile?.id ? user.profile.id.slice(0,2).toUpperCase() : 'U')}
                       </div>
 
                       {/* User Info */}
                       <div className="flex-1 min-w-0">
-                        <p className={`font-bold text-sm truncate ${user.name === 'Vaibhav S.' ? 'text-blue-600' : 'text-slate-900'}`}>
-                          {user.name} {user.name === 'Vaibhav S.' && '(You)'}
+                        <p className={`font-bold text-sm truncate text-slate-900`}>
+                          {user.profile?.name || user.user_id}
                         </p>
                       </div>
 
                       {/* Ticket Count */}
                       <div className="text-right shrink-0">
-                        <p className="font-black text-sm text-slate-900">{user.tickets}</p>
+                        <p className="font-black text-sm text-slate-900">{user.tickets || user.qty || 0}</p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tickets</p>
                       </div>
                     </div>
